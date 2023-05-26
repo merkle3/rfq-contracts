@@ -63,10 +63,10 @@ contract MerkleOrderSettler {
         _;
     }
 
-    function isValidSignature(address signer, bytes32 hash, bytes memory signature) internal pure returns (bool) {
-        require(signer != address(0), "Signer cannot be address(0)");
+    function isValidSignature(address _signer, bytes32 _hash, bytes memory _signature) internal pure returns (bool) {
+        require(_signer != address(0), "Signer cannot be address(0)");
 
-        bytes32 signedHash = hash.toEthSignedMessageHash();
-        return signedHash.recover(signature) == signer;
+        bytes32 signedHash = _hash.toEthSignedMessageHash();
+        return signedHash.recover(_signature) == _signer;
     }
 }
