@@ -41,12 +41,17 @@ contract MerkleOrderSettler {
         onlyValidSignatures(_makerOrder, _signature)
         returns (uint256, uint256, uint256)
     {
-        // TODO: Actions
-        // Transfer tokenIn to taker
+        // TODO:
+        // Validation:
+        // Already executed orders
+        // Actions:
+        // If givenIn makerTokens = tokenOut, takerTokens = tokenIn else vice versa
+        // Transfer takerTokens taker
         // Execute taker callback
-        // Make sure we have received the tokenOut and it matches the order tokenOut
+        // Make sure we have received the makerTokens and it matches the order makerTokens
         // Make sure our ethBalanceAfter - ethBalanceBefore >= gasEstimation
-        // Transfer tokenOut to maker
+        // Transfer makerTokens to maker
+        // Return makerTokens, takerTokens, gasEstimation
 
         return (uint256(0), uint256(0), uint256(0));
     }
@@ -64,9 +69,6 @@ contract MerkleOrderSettler {
     }
 
     function isValidSignature(address _signer, bytes32 _hash, bytes memory _signature) internal pure returns (bool) {
-        require(_signer != address(0), "Signer cannot be address(0)");
-
-        bytes32 signedHash = _hash.toEthSignedMessageHash();
-        return signedHash.recover(_signature) == _signer;
+        return _hash.recover(_signature) == _signer;
     }
 }

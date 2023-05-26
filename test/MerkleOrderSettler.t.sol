@@ -29,7 +29,7 @@ contract MerkleOrderSettlerTest is Test {
     }
 
     function testSignerZeroAddr() public {
-        vm.expectRevert("Signer cannot be address(0)");
+        vm.expectRevert("Invalid Signature");
         (Order memory order, bytes memory signature) = getOrderAndSignature(address(0));
         merkleOrderSettler.fillOrder(order, signature);
     }
@@ -52,7 +52,7 @@ contract MerkleOrderSettlerTest is Test {
             tokenOut: address(0),
             tokenOutAmountMin: 0
         });
-        bytes32 digest = keccak256(abi.encode(order)).toEthSignedMessageHash();
+        bytes32 digest = keccak256(abi.encode(order));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(makerPrivateKey, digest);
         return (order, abi.encodePacked(r, s, v));
     }
