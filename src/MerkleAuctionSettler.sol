@@ -59,6 +59,17 @@ contract MerkleAuctionSettler {
         uint256 minimumEthBalance,
         bytes memory fillerCallback
     ) public returns (uint256, uint256, uint256) {
+        // Validation:
+        // Only Order Matching Engine can call this
+        // Signature verification
+
+        // Actions:
+        // Transfer tokenIn to taker
+        // Execute taker callback
+        // Make sure we have received the tokenOut and it matches the order tokenOut
+        // Make sure our ethBalanceAfter - ethBalanceBefore >= gasEstimation
+        // Transfer tokenOut to maker
+
         require(msg.sender == merkleEoA || tx.origin == address(0));
 
         Order memory order = abi.decode(orderBytes, (Order));
