@@ -16,21 +16,21 @@ contract MerkleOrderSettlerTest is Test {
         merkleOrderSettler = new MerkleOrderSettler();
     }
 
-    function testValidSignature() public view {
-        (Order memory order, bytes memory signature) = getOrderAndSignature(maker);
+    function testValidSignature() public {
+        (Order memory order, bytes memory signature) = getOrderAndSignature(maker, bytes32(""));
         merkleOrderSettler.fillOrder(order, signature);
     }
 
     function testInvalidSignature() public {
         // expect revert since signer does not match the private key used to sign
         vm.expectRevert("Invalid Signature");
-        (Order memory order, bytes memory signature) = getOrderAndSignature(address(0x1));
+        (Order memory order, bytes memory signature) = getOrderAndSignature(address(0x1), bytes32(""));
         merkleOrderSettler.fillOrder(order, signature);
     }
 
     function testSignerZeroAddr() public {
         vm.expectRevert("Invalid Signature");
-        (Order memory order, bytes memory signature) = getOrderAndSignature(address(0));
+        (Order memory order, bytes memory signature) = getOrderAndSignature(address(0), bytes32(""));
         merkleOrderSettler.fillOrder(order, signature);
     }
 
@@ -38,13 +38,20 @@ contract MerkleOrderSettlerTest is Test {
         // only Order Matching Engine can call fillOrder
         vm.expectRevert("Only OME");
         vm.prank(address(0x1));
-        (Order memory order, bytes memory signature) = getOrderAndSignature(maker);
+        (Order memory order, bytes memory signature) = getOrderAndSignature(maker, bytes32(""));
         merkleOrderSettler.fillOrder(order, signature);
     }
 
-    function getOrderAndSignature(address signer) public view returns (Order memory, bytes memory) {
+    function testNotExecutedOrders() public {
+        (Order memory order, bytes memory signature) = getOrderAndSignature(maker, bytes32("test"));
+        merkleOrderSettler.fillOrder(order, signature);
+        vm.expectRevert("Already executed.");
+        merkleOrderSettler.fillOrder(order, signature);
+    }
+
+    function getOrderAndSignature(address signer, bytes32 orderId) public view returns (Order memory, bytes memory) {
         Order memory order = Order({
-            id: bytes32(0),
+            id: orderId,
             maker: signer,
             givenIn: false,
             tokenIn: address(0),

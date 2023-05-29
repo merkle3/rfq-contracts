@@ -28,6 +28,8 @@ contract MerkleOrderSettler {
     using ECDSA for bytes32;
 
     address public orderMatchingEngine;
+    // orderId to block.timestamp
+    mapping(bytes32 => uint256) public executedOrders;
 
     constructor() {
         // expecting deployer to be the order matching engine
@@ -36,14 +38,12 @@ contract MerkleOrderSettler {
 
     function fillOrder(Order memory _makerOrder, bytes calldata _signature)
         public
-        view
         onlyOrderMatchingEngine
+        notExecutedOrders(_makerOrder.id)
         onlyValidSignatures(_makerOrder, _signature)
         returns (uint256, uint256, uint256)
     {
-        // TODO:
-        // Validation:
-        // Already executed orders
+        setOrderExecuted(_makerOrder.id);
         // Actions:
         // If givenIn makerTokens = tokenOut, takerTokens = tokenIn else vice versa
         // Transfer takerTokens taker
@@ -70,5 +70,17 @@ contract MerkleOrderSettler {
 
     function isValidSignature(address _signer, bytes32 _hash, bytes memory _signature) internal pure returns (bool) {
         return _hash.recover(_signature) == _signer;
+    }
+
+    modifier notExecutedOrders(bytes32 _orderId) {
+        bool notExecuted = executedOrders[_orderId] == 0;
+        console.log("notExecuted ", notExecuted);
+        require(notExecuted, "Already executed.");
+
+        _;
+    }
+
+    function setOrderExecuted(bytes32 _orderId) internal {
+        executedOrders[_orderId] = block.number;
     }
 }
