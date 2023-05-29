@@ -8,16 +8,16 @@ import "openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 contract MerkleOrderSettlerTest is Test {
     using ECDSA for bytes32;
 
-    MerkleOrderSettler public merkleOrderSettler;
+    Settler public merkleOrderSettler;
 
     uint256 makerPrivateKey = 1;
     address maker = vm.addr(makerPrivateKey);
 
     function setUp() public {
-        merkleOrderSettler = new MerkleOrderSettler();
+        merkleOrderSettler = new Settler();
     }
     // TODO: implement full flow tests
-    // function testValidSignature() public {
+    // function testValidSettle() public {
     //     (Order memory order, bytes memory signature) = getOrderAndSignature(maker, bytes32(""));
     //     merkleOrderSettler.settle(order, signature, "0x");
     // }

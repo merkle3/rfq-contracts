@@ -5,9 +5,13 @@ import "openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "forge-std/console.sol";
 
-// // To be implemented by the takers
+// To be implemented by the takers
 interface MerkleOrderTaker {
-    function take(Order memory order, bytes calldata callback) external view returns (bool);
+    function take(Order memory order, bytes calldata callback) external returns (bool);
+}
+
+interface MerkleOrderSettler {
+    function getAmounts(Order memory _order) external pure returns (uint256, uint256, ERC20, ERC20);
 }
 
 interface ERC20 {
@@ -27,13 +31,14 @@ struct Order {
     bool maximizeOut; // if true maker sends tokenIn and receives tokenOut else vice versa
 }
 
-contract MerkleOrderSettler {
+contract Settler is MerkleOrderSettler {
     using ECDSA for bytes32;
 
     address public orderMatchingEngine;
     // orderId to block.timestamp
     mapping(bytes32 => uint256) public executedOrders;
 
+    // gas used tracker variable
     uint256 startGas;
 
     constructor() {
@@ -41,6 +46,7 @@ contract MerkleOrderSettler {
         orderMatchingEngine = msg.sender;
     }
 
+    // avoiding stack too deep error
     struct SettleLocalVars {
         Order _order;
         ERC20 makerErc20;
@@ -50,6 +56,8 @@ contract MerkleOrderSettler {
         uint256 gasEstimation;
     }
 
+    receive() external payable {}
+
     function settle(Order memory _order, bytes calldata _signature, bytes calldata _takeCallback)
         public
         startGasTracker
@@ -58,17 +66,14 @@ contract MerkleOrderSettler {
         onlyValidSignatures(_order, _signature)
         returns (uint256, uint256, uint256)
     {
-        // avoiding stack too deep error
         SettleLocalVars memory vars;
         vars._order = _order;
         setOrderExecuted(vars._order.id);
 
         // If maximizeOutput is true => maker sends tokenIn and receives tokenOut else vice versa
-        (, vars.minzdAmountToTaker, vars.makerErc20, vars.takerErc20) = vars._order.maximizeOut
-            ? (vars._order.amountOut, vars._order.amountIn, ERC20(vars._order.tokenOut), ERC20(vars._order.tokenIn))
-            : (vars._order.amountIn, vars._order.amountOut, ERC20(vars._order.tokenIn), ERC20(vars._order.tokenOut));
+        (, vars.minzdAmountToTaker, vars.makerErc20, vars.takerErc20) = getAmounts(_order);
 
-        // Pull taker tokens out from maker and send to taker
+        // Pull taker tokens out from maker and send to taker, assume erc20.approve is already called
         vars.takerErc20.transferFrom(vars._order.maker, vars._order.taker, vars.minzdAmountToTaker);
 
         uint256 makerBalanceBefore = vars.makerErc20.balanceOf(address(this));
@@ -92,6 +97,12 @@ contract MerkleOrderSettler {
         require(enoughGasSentByTaker, "Not enough gas sent by taker.");
 
         return (maxzdAmountToMaker, vars.minzdAmountToTaker, gasEstimation);
+    }
+
+    function getAmounts(Order memory _order) public pure returns (uint256, uint256, ERC20, ERC20) {
+        return _order.maximizeOut
+            ? (_order.amountOut, _order.amountIn, ERC20(_order.tokenOut), ERC20(_order.tokenIn))
+            : (_order.amountIn, _order.amountOut, ERC20(_order.tokenIn), ERC20(_order.tokenOut));
     }
 
     function estimateGas(uint256 ethBalanceBefore) internal view returns (bool, uint256) {
