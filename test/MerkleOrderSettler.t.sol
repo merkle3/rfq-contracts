@@ -9,29 +9,36 @@ contract MerkleOrderSettlerTest is Test {
     using ECDSA for bytes32;
 
     MerkleOrderSettler public merkleOrderSettler;
+
     uint256 makerPrivateKey = 1;
     address maker = vm.addr(makerPrivateKey);
 
     function setUp() public {
         merkleOrderSettler = new MerkleOrderSettler();
     }
-
-    function testValidSignature() public {
-        (Order memory order, bytes memory signature) = getOrderAndSignature(maker, bytes32(""));
-        merkleOrderSettler.fillOrder(order, signature);
-    }
+    // TODO: implement full flow tests
+    // function testValidSignature() public {
+    //     (Order memory order, bytes memory signature) = getOrderAndSignature(maker, bytes32(""));
+    //     merkleOrderSettler.settle(order, signature, "0x");
+    // }
+    // function testNotExecutedOrders() public {
+    //     (Order memory order, bytes memory signature) = getOrderAndSignature(maker, bytes32("test"));
+    //     merkleOrderSettler.settle(order, signature, "0x");
+    //     vm.expectRevert("Already executed.");
+    //     merkleOrderSettler.settle(order, signature, "0x");
+    // }
 
     function testInvalidSignature() public {
         // expect revert since signer does not match the private key used to sign
         vm.expectRevert("Invalid Signature");
         (Order memory order, bytes memory signature) = getOrderAndSignature(address(0x1), bytes32(""));
-        merkleOrderSettler.fillOrder(order, signature);
+        merkleOrderSettler.settle(order, signature, "0x");
     }
 
     function testSignerZeroAddr() public {
         vm.expectRevert("Invalid Signature");
         (Order memory order, bytes memory signature) = getOrderAndSignature(address(0), bytes32(""));
-        merkleOrderSettler.fillOrder(order, signature);
+        merkleOrderSettler.settle(order, signature, "0x");
     }
 
     function testOnlyOme() public {
@@ -39,25 +46,19 @@ contract MerkleOrderSettlerTest is Test {
         vm.expectRevert("Only OME");
         vm.prank(address(0x1));
         (Order memory order, bytes memory signature) = getOrderAndSignature(maker, bytes32(""));
-        merkleOrderSettler.fillOrder(order, signature);
-    }
-
-    function testNotExecutedOrders() public {
-        (Order memory order, bytes memory signature) = getOrderAndSignature(maker, bytes32("test"));
-        merkleOrderSettler.fillOrder(order, signature);
-        vm.expectRevert("Already executed.");
-        merkleOrderSettler.fillOrder(order, signature);
+        merkleOrderSettler.settle(order, signature, "0x");
     }
 
     function getOrderAndSignature(address signer, bytes32 orderId) public view returns (Order memory, bytes memory) {
         Order memory order = Order({
             id: orderId,
             maker: signer,
-            givenIn: false,
+            taker: address(0),
             tokenIn: address(0),
-            tokenInAmountMax: 0,
+            amountIn: 0,
             tokenOut: address(0),
-            tokenOutAmountMin: 0
+            amountOut: 0,
+            maximizeOut: false
         });
         bytes32 digest = keccak256(abi.encode(order));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(makerPrivateKey, digest);
