@@ -74,7 +74,6 @@ contract MerkleOrderSettler {
 
     modifier notExecutedOrders(bytes32 _orderId) {
         bool notExecuted = executedOrders[_orderId] == 0;
-        console.log("notExecuted ", notExecuted);
         require(notExecuted, "Already executed.");
 
         _;
