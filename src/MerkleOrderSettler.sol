@@ -68,6 +68,8 @@ contract MerkleOrderSettler {
         onlyValidSignatures(_order, _signature)
         returns (uint256, uint256)
     {
+        uint256 ethBalanceBefore = address(this).balance;
+
         SettleLocalVars memory vars;
         vars.order = _order;
         vars.takerData = _takerData;
@@ -81,7 +83,6 @@ contract MerkleOrderSettler {
         vars.tokenIn.transferFrom(vars.order.maker, vars.order.taker, vars.minzdAmountIn);
 
         uint256 tokenOutBalanceBefore = vars.tokenOut.balanceOf(address(this));
-        uint256 ethBalanceBefore = address(this).balance;
 
         // Executes take callback which transfers tokenOut to settler
         bool success = MerkleOrderTaker(vars.order.taker).take(vars.order, vars.takerData);
