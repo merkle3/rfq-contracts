@@ -7,11 +7,11 @@ import "forge-std/console.sol";
 
 // To be implemented by the takers
 interface MerkleOrderTaker {
-    function take(Order memory order, bytes calldata callback) external returns (bool);
+    function take(Order memory order, bytes calldata data) external returns (bool);
 }
 
 interface MerkleOrderSettler {
-    function getAmounts(Order memory _order) external pure returns (uint256, uint256, ERC20, ERC20);
+    function getOrderDetail(Order memory _order) external pure returns (uint256, uint256, ERC20, ERC20);
 }
 
 interface ERC20 {
@@ -58,7 +58,7 @@ contract Settler is MerkleOrderSettler {
 
     receive() external payable {}
 
-    function settle(Order memory _order, bytes calldata _signature, bytes calldata _takeCallback)
+    function settle(Order memory _order, bytes calldata _signature, bytes calldata _takerData)
         public
         startGasTracker
         onlyOrderMatchingEngine
@@ -71,7 +71,7 @@ contract Settler is MerkleOrderSettler {
         setOrderExecuted(vars._order.id);
 
         // If maximizeOutput is true => maker sends tokenIn and receives tokenOut else vice versa
-        (, vars.minzdAmountToTaker, vars.makerErc20, vars.takerErc20) = getAmounts(_order);
+        (, vars.minzdAmountToTaker, vars.makerErc20, vars.takerErc20) = getOrderDetail(_order);
 
         // Pull taker tokens out from maker and send to taker, assume erc20.approve is already called
         vars.takerErc20.transferFrom(vars._order.maker, vars._order.taker, vars.minzdAmountToTaker);
@@ -80,7 +80,7 @@ contract Settler is MerkleOrderSettler {
         uint256 orderSettlerEthBalanceBefore = address(this).balance;
 
         // Executes take callback
-        bool success = MerkleOrderTaker(vars._order.taker).take(vars._order, _takeCallback);
+        bool success = MerkleOrderTaker(vars._order.taker).take(vars._order, _takerData);
         require(success, "Taker callback failed.");
 
         uint256 makerBalanceAfter = vars.makerErc20.balanceOf(address(this));
@@ -99,7 +99,7 @@ contract Settler is MerkleOrderSettler {
         return (maxzdAmountToMaker, vars.minzdAmountToTaker, gasEstimation);
     }
 
-    function getAmounts(Order memory _order) public pure returns (uint256, uint256, ERC20, ERC20) {
+    function getOrderDetail(Order memory _order) public pure returns (uint256, uint256, ERC20, ERC20) {
         return _order.maximizeOut
             ? (_order.amountOut, _order.amountIn, ERC20(_order.tokenOut), ERC20(_order.tokenIn))
             : (_order.amountIn, _order.amountOut, ERC20(_order.tokenIn), ERC20(_order.tokenOut));
