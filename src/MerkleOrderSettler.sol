@@ -10,10 +10,6 @@ interface MerkleOrderTaker {
     function take(Order memory order, bytes calldata data) external returns (bool);
 }
 
-interface MerkleOrderSettler {
-    function getOrderDetail(Order memory _order) external pure returns (uint256, uint256, ERC20, ERC20);
-}
-
 interface ERC20 {
     function balanceOf(address owner) external view returns (uint256);
     function transfer(address to, uint256 value) external;
@@ -33,7 +29,7 @@ struct Order {
     bool maximizeOut; // if true maker sends tokenIn and receives tokenOut else vice versa
 }
 
-contract Settler is MerkleOrderSettler {
+contract MerkleOrderSettler {
     using ECDSA for bytes32;
 
     address public owner = 0x65D072964AF7DdBC25cDb726A97B4d1a04A32242;
@@ -54,10 +50,10 @@ contract Settler is MerkleOrderSettler {
     // avoiding stack too deep error
     struct SettleLocalVars {
         Order _order;
-        ERC20 makerErc20;
-        ERC20 takerErc20;
-        uint256 maxzdAmountToMaker;
-        uint256 minzdAmountToTaker;
+        ERC20 tokenIn;
+        ERC20 tokenOut;
+        uint256 minzdAmountIn;
+        uint256 maxzdAmountOut;
         uint256 gasEstimation;
     }
 
@@ -73,43 +69,38 @@ contract Settler is MerkleOrderSettler {
         vars._order = _order;
         setOrderExecuted(vars._order.id);
 
-        // If maximizeOutput is true => maker sends tokenIn and receives tokenOut else vice versa
-        (, vars.minzdAmountToTaker, vars.makerErc20, vars.takerErc20) = getOrderDetail(_order);
+        // maker sends tokenIn and receives tokenOut
+        (vars.minzdAmountIn, vars.tokenIn, vars.tokenOut) =
+            (_order.amountIn, ERC20(_order.tokenIn), ERC20(_order.tokenOut));
 
         // Pull taker tokens out from maker and send to taker, assume erc20.approve is already called
-        vars.takerErc20.transferFrom(vars._order.maker, vars._order.taker, vars.minzdAmountToTaker);
+        vars.tokenIn.transferFrom(vars._order.maker, vars._order.taker, vars.minzdAmountIn);
 
-        uint256 makerBalanceBefore = vars.makerErc20.balanceOf(address(this));
+        uint256 tokenOutBalanceBefore = vars.tokenOut.balanceOf(address(this));
         uint256 orderSettlerEthBalanceBefore = address(this).balance;
 
-        // Executes take callback
+        // Executes take callback which transfers tokenOut to settler
         bool success = MerkleOrderTaker(vars._order.taker).take(vars._order, _takerData);
         require(success, "Taker callback failed.");
 
-        uint256 makerBalanceAfter = vars.makerErc20.balanceOf(address(this));
+        uint256 tokenOutBalanceAfter = vars.tokenOut.balanceOf(address(this));
         // Assume we already simulated taker callback and we know the maxzdAmountToMaker that will be transfered in the callback
-        require(makerBalanceAfter > makerBalanceBefore, "Not enough amount to maker.");
+        require(tokenOutBalanceAfter > tokenOutBalanceBefore, "Not enough tokenOut.");
 
         // here we could just transfer what the maker asked for and maybe pickpocket difference?
-        uint256 maxzdAmountToMaker = makerBalanceAfter - makerBalanceBefore;
+        vars.maxzdAmountOut = tokenOutBalanceAfter - tokenOutBalanceBefore;
 
-        vars.makerErc20.transfer(vars._order.maker, maxzdAmountToMaker);
+        vars.tokenOut.transfer(vars._order.maker, vars.maxzdAmountOut);
 
         // Gas check
         (bool enoughGasSentByTaker, uint256 gasEstimation) = estimateGas(orderSettlerEthBalanceBefore);
         require(enoughGasSentByTaker, "Not enough gas sent by taker.");
 
-        return (maxzdAmountToMaker, vars.minzdAmountToTaker, gasEstimation);
+        return (vars.minzdAmountIn, vars.maxzdAmountOut, gasEstimation);
     }
 
     function updateOrderMatchingEngine(address _orderMatchingEngine) public onlyOwner {
         orderMatchingEngine = _orderMatchingEngine;
-    }
-
-    function getOrderDetail(Order memory _order) public pure returns (uint256, uint256, ERC20, ERC20) {
-        return _order.maximizeOut
-            ? (_order.amountOut, _order.amountIn, ERC20(_order.tokenOut), ERC20(_order.tokenIn))
-            : (_order.amountIn, _order.amountOut, ERC20(_order.tokenIn), ERC20(_order.tokenOut));
     }
 
     function estimateGas(uint256 ethBalanceBefore) internal view returns (bool, uint256) {

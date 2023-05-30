@@ -9,7 +9,7 @@ import "openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 contract MerkleOrderSettlerTest is Test {
     using ECDSA for bytes32;
 
-    Settler public merkleOrderSettler;
+    MerkleOrderSettler public merkleOrderSettler;
     Taker public taker;
 
     uint256 makerPrivateKey = 1;
@@ -18,7 +18,7 @@ contract MerkleOrderSettlerTest is Test {
     function setUp() public {
         string memory forkUrl = vm.rpcUrl("fork_url");
         vm.createSelectFork(forkUrl);
-        merkleOrderSettler = new Settler();
+        merkleOrderSettler = new MerkleOrderSettler();
         taker = new Taker();
     }
 
@@ -69,17 +69,7 @@ contract MerkleOrderSettlerTest is Test {
     }
 
     function testValidUsdcUsdtSettle() public {
-        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"), true);
-        // taker is required to refund the gas
-        // setting dummy 1 eth for now
-        uint256 gasToRefund = uint256(1 ether);
-        vm.deal(address(taker), 1 ether);
-
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
-    }
-
-    function testValidUsdcUsdtSettleMinOut() public {
-        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"), false);
+        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"));
         // taker is required to refund the gas
         // setting dummy 1 eth for now
         uint256 gasToRefund = uint256(1 ether);
@@ -90,7 +80,7 @@ contract MerkleOrderSettlerTest is Test {
 
     // same orderId should revert with already executed
     function testNotExecutedOrders() public {
-        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"), true);
+        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"));
         uint256 gasToRefund = uint256(1 ether);
         vm.deal(address(taker), 1 ether);
         merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
@@ -104,17 +94,13 @@ contract MerkleOrderSettlerTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function getUsdcUsdtOrder(address _maker, bytes32 _orderId, bool _maximizeOut) public returns (Order memory) {
+    function getUsdcUsdtOrder(address _maker, bytes32 _orderId) public returns (Order memory) {
         address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address usdt = 0xa47c8bf37f92aBed4A126BDA807A7b7498661acD;
         uint256 amountIn = 10 * 1e6; // maker needs to have this
         uint256 amountOut = 10 * 1e6; // taker needs to have this
 
-        if (_maximizeOut) {
-            orderSetup(_maker, address(taker), usdc, usdt, amountIn, amountOut);
-        } else {
-            orderSetup(_maker, address(taker), usdt, usdc, amountOut, amountIn);
-        }
+        orderSetup(_maker, address(taker), usdc, usdt, amountIn, amountOut);
 
         Order memory order = Order({
             id: _orderId,
@@ -124,7 +110,7 @@ contract MerkleOrderSettlerTest is Test {
             amountIn: amountIn,
             tokenOut: usdt,
             amountOut: amountOut,
-            maximizeOut: _maximizeOut
+            maximizeOut: true
         });
         return order;
     }
@@ -149,16 +135,6 @@ contract MerkleOrderSettlerTest is Test {
 
     function testValidWethWbtcSettle() public {
         Order memory order = getWethWbtcOrder(maker, bytes32("testOrder"), true);
-        // taker is required to refund the gas
-        // setting dummy 1 eth for now
-        uint256 gasToRefund = uint256(1 ether);
-        vm.deal(address(taker), 1 ether);
-
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
-    }
-
-    function testValidWethWbtcSettleMinimizeOut() public {
-        Order memory order = getWethWbtcOrder(maker, bytes32("testOrder"), false);
         // taker is required to refund the gas
         // setting dummy 1 eth for now
         uint256 gasToRefund = uint256(1 ether);

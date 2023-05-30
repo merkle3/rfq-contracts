@@ -5,10 +5,9 @@ import "../src/MerkleOrderSettler.sol";
 
 contract Taker is MerkleOrderTaker {
     function take(Order memory _order, bytes calldata data) external returns (bool) {
-        MerkleOrderSettler settler = MerkleOrderSettler(msg.sender);
-        (uint256 amountToMaker,, ERC20 makerErc20,) = settler.getOrderDetail(_order);
+        (uint256 amountOut, ERC20 tokenOut) = (_order.amountOut, ERC20(_order.tokenOut));
         // Transfer maker tokens to settler
-        makerErc20.transfer(msg.sender, amountToMaker);
+        tokenOut.transfer(msg.sender, amountOut);
 
         // Transfer gas required to msg.sender (caller)
         address payable caller = payable(msg.sender);
