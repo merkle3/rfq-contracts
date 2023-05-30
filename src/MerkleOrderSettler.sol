@@ -92,6 +92,18 @@ contract MerkleOrderSettler {
 
         vars.tokenOut.transfer(vars._order.maker, vars.maxzdAmountOut);
 
+        if (_order.maximizeOut) {
+            // we check that the output is at least what the user expected
+            require(vars.maxzdAmountOut >= _order.amountOut, "Not enough tokenOut.");
+        } else {
+            require(vars.maxzdAmountOut == _order.amountOut, "Output must be what user expected.");
+            bool isTokenInDustLeft = vars.tokenIn.balanceOf(address(this)) > 0;
+            // transfer dust to maker
+            if (isTokenInDustLeft) {
+                vars.tokenIn.transfer(vars._order.maker, vars.tokenIn.balanceOf(address(this)));
+            }
+        }
+
         // Gas check
         (bool enoughGasSentByTaker, uint256 gasEstimation) = estimateGas(orderSettlerEthBalanceBefore);
         require(enoughGasSentByTaker, "Not enough gas sent by taker.");
