@@ -92,11 +92,11 @@ contract MerkleOrderSettler {
 
         vars.tokenOut.transfer(vars._order.maker, vars.maxzdAmountOut);
 
-        if (_order.maximizeOut) {
+        if (vars._order.maximizeOut) {
             // we check that the output is at least what the user expected
-            require(vars.maxzdAmountOut >= _order.amountOut, "Not enough tokenOut.");
+            require(vars.maxzdAmountOut >= vars._order.amountOut, "Not enough tokenOut.");
         } else {
-            require(vars.maxzdAmountOut == _order.amountOut, "Output must be what user expected.");
+            require(vars.maxzdAmountOut == vars._order.amountOut, "Output must be what user expected.");
             bool isTokenInDustLeft = vars.tokenIn.balanceOf(address(this)) > 0;
             // transfer dust to maker
             if (isTokenInDustLeft) {
