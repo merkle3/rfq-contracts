@@ -26,7 +26,7 @@ struct Order {
     uint256 amountIn;
     address tokenOut;
     uint256 amountOut;
-    bool maximizeOut; // if true maker sends tokenIn and receives tokenOut else vice versa
+    bool maximizeOut;
 }
 
 contract MerkleOrderSettler {
@@ -38,9 +38,6 @@ contract MerkleOrderSettler {
 
     // orderId to block.timestamp
     mapping(bytes32 => uint256) public executedOrders;
-
-    // gas used tracker variable
-    uint256 startGas;
 
     constructor() {
         // expecting deployer to be the order matching engine
@@ -56,22 +53,25 @@ contract MerkleOrderSettler {
         uint256 maxzdAmountOut;
         uint256 gasEstimation;
         bytes takerData;
-        uint256 gasLimit;
+        uint256 minimumEthPayment;
     }
 
-    function settle(Order memory _order, bytes calldata _signature, bytes calldata _takerData, uint256 _gasLimit)
+    function settle(
+        Order memory _order,
+        bytes calldata _signature,
+        bytes calldata _takerData,
+        uint256 _minimumEthPayment
+    )
         public
-        startGasTracker
         onlyOrderMatchingEngine
         notExecutedOrders(_order.id)
         onlyValidSignatures(_order, _signature)
-        returns (uint256, uint256, uint256)
+        returns (uint256, uint256)
     {
         SettleLocalVars memory vars;
         vars.order = _order;
         vars.takerData = _takerData;
-        vars.gasLimit = _gasLimit;
-        setOrderExecuted(vars.order.id);
+        vars.minimumEthPayment = _minimumEthPayment;
 
         // maker sends tokenIn and receives tokenOut
         (vars.minzdAmountIn, vars.tokenIn, vars.tokenOut) =
@@ -81,7 +81,7 @@ contract MerkleOrderSettler {
         vars.tokenIn.transferFrom(vars.order.maker, vars.order.taker, vars.minzdAmountIn);
 
         uint256 tokenOutBalanceBefore = vars.tokenOut.balanceOf(address(this));
-        uint256 orderSettlerEthBalanceBefore = address(this).balance;
+        uint256 ethBalanceBefore = address(this).balance;
 
         // Executes take callback which transfers tokenOut to settler
         bool success = MerkleOrderTaker(vars.order.taker).take(vars.order, vars.takerData);
@@ -96,43 +96,33 @@ contract MerkleOrderSettler {
         vars.tokenOut.transfer(vars.order.maker, vars.maxzdAmountOut);
 
         if (vars.order.maximizeOut) {
-            // we check that the output is at least what the user expected
+            // The output must be at least what the user expected
             require(vars.maxzdAmountOut >= vars.order.amountOut, "Not enough tokenOut.");
         } else {
             require(vars.maxzdAmountOut == vars.order.amountOut, "Output must be what user expected.");
             bool isTokenInDustLeft = vars.tokenIn.balanceOf(address(this)) > 0;
-            // transfer dust to maker
             if (isTokenInDustLeft) {
                 vars.tokenIn.transfer(vars.order.maker, vars.tokenIn.balanceOf(address(this)));
             }
         }
 
-        // Gas check
-        (bool enoughGasSentByTaker, uint256 gasEstimation) = estimateGas(orderSettlerEthBalanceBefore, vars.gasLimit);
-        require(enoughGasSentByTaker, "Not enough gas sent by taker.");
+        // Minimum payment check
+        uint256 ethBalanceAfter = address(this).balance;
+        bool takerCoveredGasCosts = (ethBalanceAfter - ethBalanceBefore >= vars.minimumEthPayment);
 
-        return (vars.minzdAmountIn, vars.maxzdAmountOut, gasEstimation);
+        require(takerCoveredGasCosts, "Taker payment did not cover minimum payment.");
+
+        setOrderExecuted(vars.order.id);
+
+        return (vars.minzdAmountIn, vars.maxzdAmountOut);
     }
 
     function updateOrderMatchingEngine(address _orderMatchingEngine) public onlyOwner {
         orderMatchingEngine = _orderMatchingEngine;
     }
 
-    function estimateGas(uint256 ethBalanceBefore, uint256 gasLimit) internal view returns (bool, uint256) {
-        uint256 ethBalanceAfter = address(this).balance;
-        uint256 endGas = gasleft();
-        uint256 gasUsed = startGas - endGas;
-        uint256 gasSpentWei = (gasUsed + gasLimit) * tx.gasprice;
-        return (ethBalanceAfter - ethBalanceBefore >= gasSpentWei, gasUsed);
-    }
-
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner");
-        _;
-    }
-
-    modifier startGasTracker() {
-        startGas = gasleft();
         _;
     }
 
