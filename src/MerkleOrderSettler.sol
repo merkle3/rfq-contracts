@@ -39,6 +39,7 @@ contract Settler is MerkleOrderSettler {
     address public owner = 0x65D072964AF7DdBC25cDb726A97B4d1a04A32242;
 
     address public orderMatchingEngine;
+
     // orderId to block.timestamp
     mapping(bytes32 => uint256) public executedOrders;
 
@@ -101,11 +102,6 @@ contract Settler is MerkleOrderSettler {
         return (maxzdAmountToMaker, vars.minzdAmountToTaker, gasEstimation);
     }
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner");
-        _;
-    }
-
     function updateOrderMatchingEngine(address _orderMatchingEngine) public onlyOwner {
         orderMatchingEngine = _orderMatchingEngine;
     }
@@ -122,6 +118,11 @@ contract Settler is MerkleOrderSettler {
         uint256 gasUsed = startGas - endGas;
         uint256 gasSpentWei = gasUsed * tx.gasprice;
         return (ethBalanceAfter - ethBalanceBefore >= gasSpentWei, gasUsed);
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner");
+        _;
     }
 
     modifier startGasTracker() {

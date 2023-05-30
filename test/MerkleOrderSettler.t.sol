@@ -69,7 +69,17 @@ contract MerkleOrderSettlerTest is Test {
     }
 
     function testValidUsdcUsdtSettle() public {
-        Order memory order = getUsdcUstOrder(maker, bytes32("testOrder"));
+        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"), true);
+        // taker is required to refund the gas
+        // setting dummy 1 eth for now
+        uint256 gasToRefund = uint256(1 ether);
+        vm.deal(address(taker), 1 ether);
+
+        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
+    }
+
+    function testValidUsdcUsdtSettleMinOut() public {
+        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"), false);
         // taker is required to refund the gas
         // setting dummy 1 eth for now
         uint256 gasToRefund = uint256(1 ether);
@@ -80,7 +90,7 @@ contract MerkleOrderSettlerTest is Test {
 
     // same orderId should revert with already executed
     function testNotExecutedOrders() public {
-        Order memory order = getUsdcUstOrder(maker, bytes32("testOrder"));
+        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"), true);
         uint256 gasToRefund = uint256(1 ether);
         vm.deal(address(taker), 1 ether);
         merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
@@ -94,29 +104,90 @@ contract MerkleOrderSettlerTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function getUsdcUstOrder(address makerAddr, bytes32 orderId) public returns (Order memory) {
+    function getUsdcUsdtOrder(address _maker, bytes32 _orderId, bool _maximizeOut) public returns (Order memory) {
         address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address usdt = 0xa47c8bf37f92aBed4A126BDA807A7b7498661acD;
         uint256 amountIn = 10 * 1e6; // maker needs to have this
         uint256 amountOut = 10 * 1e6; // taker needs to have this
-        // setup balances
-        deal(usdc, makerAddr, amountIn);
-        deal(usdt, address(taker), amountIn);
 
-        // setup approval
-        vm.startPrank(address(makerAddr));
-        ERC20(usdc).approve(address(merkleOrderSettler), amountIn);
-        vm.stopPrank();
+        if (_maximizeOut) {
+            orderSetup(_maker, address(taker), usdc, usdt, amountIn, amountOut);
+        } else {
+            orderSetup(_maker, address(taker), usdt, usdc, amountOut, amountIn);
+        }
 
         Order memory order = Order({
-            id: orderId,
-            maker: makerAddr,
+            id: _orderId,
+            maker: _maker,
             taker: address(taker),
             tokenIn: usdc,
             amountIn: amountIn,
             tokenOut: usdt,
             amountOut: amountOut,
-            maximizeOut: true
+            maximizeOut: _maximizeOut
+        });
+        return order;
+    }
+
+    function orderSetup(
+        address _maker,
+        address _taker,
+        address _tokenIn,
+        address _tokenOut,
+        uint256 _amountIn,
+        uint256 _amountOut
+    ) public {
+        // setup balances
+        deal(_tokenIn, _maker, _amountIn);
+        deal(_tokenOut, address(_taker), _amountOut);
+
+        // setup approval
+        vm.startPrank(address(_maker));
+        ERC20(_tokenIn).approve(address(merkleOrderSettler), _amountIn);
+        vm.stopPrank();
+    }
+
+    function testValidWethWbtcSettle() public {
+        Order memory order = getWethWbtcOrder(maker, bytes32("testOrder"), true);
+        // taker is required to refund the gas
+        // setting dummy 1 eth for now
+        uint256 gasToRefund = uint256(1 ether);
+        vm.deal(address(taker), 1 ether);
+
+        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
+    }
+
+    function testValidWethWbtcSettleMinimizeOut() public {
+        Order memory order = getWethWbtcOrder(maker, bytes32("testOrder"), false);
+        // taker is required to refund the gas
+        // setting dummy 1 eth for now
+        uint256 gasToRefund = uint256(1 ether);
+        vm.deal(address(taker), 1 ether);
+
+        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
+    }
+
+    function getWethWbtcOrder(address _maker, bytes32 _orderId, bool _maximizeOut) public returns (Order memory) {
+        address weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        address wbtc = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
+        uint256 amountIn = 10 * 1e18; // maker needs to have this
+        uint256 amountOut = 10 * 1e8; // taker needs to have this
+
+        if (_maximizeOut) {
+            orderSetup(_maker, address(taker), weth, wbtc, amountIn, amountOut);
+        } else {
+            orderSetup(_maker, address(taker), wbtc, weth, amountOut, amountIn);
+        }
+
+        Order memory order = Order({
+            id: _orderId,
+            maker: _maker,
+            taker: address(taker),
+            tokenIn: weth,
+            amountIn: amountIn,
+            tokenOut: wbtc,
+            amountOut: amountOut,
+            maximizeOut: _maximizeOut
         });
         return order;
     }

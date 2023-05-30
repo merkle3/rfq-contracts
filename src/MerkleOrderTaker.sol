@@ -14,6 +14,7 @@ contract Taker is MerkleOrderTaker {
         address payable caller = payable(msg.sender);
         (uint256 gasToRefund) = abi.decode(data, (uint256));
         caller.transfer(gasToRefund);
+
         // do more things: backruns, liquidations, etc.
         return true;
     }
