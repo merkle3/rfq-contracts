@@ -37,13 +37,13 @@ contract MerkleOrderSettlerTest is Test {
         // expect revert since signer does not match the private key used to sign
         vm.expectRevert("Invalid Signature");
         Order memory order = getDummyOrder(address(0x1), bytes32("testOrder"));
-        merkleOrderSettler.settle(order, getSig(order), "0x");
+        merkleOrderSettler.settle(order, getSig(order), "0x", 0);
     }
 
     function testSignerZeroAddr() public {
         vm.expectRevert("Invalid Signature");
         Order memory order = getDummyOrder(address(0), bytes32("testOrder"));
-        merkleOrderSettler.settle(order, getSig(order), "0x");
+        merkleOrderSettler.settle(order, getSig(order), "0x", 0);
     }
 
     function testOnlyOme() public {
@@ -51,7 +51,7 @@ contract MerkleOrderSettlerTest is Test {
         vm.expectRevert("Only OME");
         vm.prank(address(0x1));
         Order memory order = getDummyOrder(maker, bytes32("testOrder"));
-        merkleOrderSettler.settle(order, getSig(order), "0x");
+        merkleOrderSettler.settle(order, getSig(order), "0x", 0);
     }
 
     function getDummyOrder(address makerAddr, bytes32 orderId) public pure returns (Order memory) {
@@ -75,7 +75,7 @@ contract MerkleOrderSettlerTest is Test {
         uint256 gasToRefund = uint256(1 ether);
         vm.deal(address(taker), 1 ether);
 
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
+        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
     }
 
     // same orderId should revert with already executed
@@ -83,9 +83,9 @@ contract MerkleOrderSettlerTest is Test {
         Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"));
         uint256 gasToRefund = uint256(1 ether);
         vm.deal(address(taker), 1 ether);
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
+        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
         vm.expectRevert("Already executed.");
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
+        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
     }
 
     function getSig(Order memory order) public view returns (bytes memory) {
@@ -140,7 +140,7 @@ contract MerkleOrderSettlerTest is Test {
         uint256 gasToRefund = uint256(1 ether);
         vm.deal(address(taker), 1 ether);
 
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund));
+        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
     }
 
     function getWethWbtcOrder(address _maker, bytes32 _orderId, bool _maximizeOut) public returns (Order memory) {

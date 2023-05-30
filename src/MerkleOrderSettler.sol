@@ -49,15 +49,17 @@ contract MerkleOrderSettler {
 
     // avoiding stack too deep error
     struct SettleLocalVars {
-        Order _order;
+        Order order;
         ERC20 tokenIn;
         ERC20 tokenOut;
         uint256 minzdAmountIn;
         uint256 maxzdAmountOut;
         uint256 gasEstimation;
+        bytes takerData;
+        uint256 gasLimit;
     }
 
-    function settle(Order memory _order, bytes calldata _signature, bytes calldata _takerData)
+    function settle(Order memory _order, bytes calldata _signature, bytes calldata _takerData, uint256 _gasLimit)
         public
         startGasTracker
         onlyOrderMatchingEngine
@@ -66,21 +68,23 @@ contract MerkleOrderSettler {
         returns (uint256, uint256, uint256)
     {
         SettleLocalVars memory vars;
-        vars._order = _order;
-        setOrderExecuted(vars._order.id);
+        vars.order = _order;
+        vars.takerData = _takerData;
+        vars.gasLimit = _gasLimit;
+        setOrderExecuted(vars.order.id);
 
         // maker sends tokenIn and receives tokenOut
         (vars.minzdAmountIn, vars.tokenIn, vars.tokenOut) =
             (_order.amountIn, ERC20(_order.tokenIn), ERC20(_order.tokenOut));
 
         // Pull taker tokens out from maker and send to taker, assume erc20.approve is already called
-        vars.tokenIn.transferFrom(vars._order.maker, vars._order.taker, vars.minzdAmountIn);
+        vars.tokenIn.transferFrom(vars.order.maker, vars.order.taker, vars.minzdAmountIn);
 
         uint256 tokenOutBalanceBefore = vars.tokenOut.balanceOf(address(this));
         uint256 orderSettlerEthBalanceBefore = address(this).balance;
 
         // Executes take callback which transfers tokenOut to settler
-        bool success = MerkleOrderTaker(vars._order.taker).take(vars._order, _takerData);
+        bool success = MerkleOrderTaker(vars.order.taker).take(vars.order, vars.takerData);
         require(success, "Taker callback failed.");
 
         uint256 tokenOutBalanceAfter = vars.tokenOut.balanceOf(address(this));
@@ -90,22 +94,22 @@ contract MerkleOrderSettler {
         // here we could just transfer what the maker asked for and maybe pickpocket difference?
         vars.maxzdAmountOut = tokenOutBalanceAfter - tokenOutBalanceBefore;
 
-        vars.tokenOut.transfer(vars._order.maker, vars.maxzdAmountOut);
+        vars.tokenOut.transfer(vars.order.maker, vars.maxzdAmountOut);
 
-        if (vars._order.maximizeOut) {
+        if (vars.order.maximizeOut) {
             // we check that the output is at least what the user expected
-            require(vars.maxzdAmountOut >= vars._order.amountOut, "Not enough tokenOut.");
+            require(vars.maxzdAmountOut >= vars.order.amountOut, "Not enough tokenOut.");
         } else {
-            require(vars.maxzdAmountOut == vars._order.amountOut, "Output must be what user expected.");
+            require(vars.maxzdAmountOut == vars.order.amountOut, "Output must be what user expected.");
             bool isTokenInDustLeft = vars.tokenIn.balanceOf(address(this)) > 0;
             // transfer dust to maker
             if (isTokenInDustLeft) {
-                vars.tokenIn.transfer(vars._order.maker, vars.tokenIn.balanceOf(address(this)));
+                vars.tokenIn.transfer(vars.order.maker, vars.tokenIn.balanceOf(address(this)));
             }
         }
 
         // Gas check
-        (bool enoughGasSentByTaker, uint256 gasEstimation) = estimateGas(orderSettlerEthBalanceBefore);
+        (bool enoughGasSentByTaker, uint256 gasEstimation) = estimateGas(orderSettlerEthBalanceBefore, vars.gasLimit);
         require(enoughGasSentByTaker, "Not enough gas sent by taker.");
 
         return (vars.minzdAmountIn, vars.maxzdAmountOut, gasEstimation);
@@ -115,11 +119,11 @@ contract MerkleOrderSettler {
         orderMatchingEngine = _orderMatchingEngine;
     }
 
-    function estimateGas(uint256 ethBalanceBefore) internal view returns (bool, uint256) {
+    function estimateGas(uint256 ethBalanceBefore, uint256 gasLimit) internal view returns (bool, uint256) {
         uint256 ethBalanceAfter = address(this).balance;
         uint256 endGas = gasleft();
         uint256 gasUsed = startGas - endGas;
-        uint256 gasSpentWei = gasUsed * tx.gasprice;
+        uint256 gasSpentWei = (gasUsed + gasLimit) * tx.gasprice;
         return (ethBalanceAfter - ethBalanceBefore >= gasSpentWei, gasUsed);
     }
 
