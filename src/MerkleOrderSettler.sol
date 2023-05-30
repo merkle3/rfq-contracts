@@ -91,7 +91,6 @@ contract MerkleOrderSettler {
         // Assume we already simulated taker callback and we know the maxzdAmountToMaker that will be transfered in the callback
         require(tokenOutBalanceAfter > tokenOutBalanceBefore, "Not enough tokenOut.");
 
-        // here we could just transfer what the maker asked for and maybe pickpocket difference?
         vars.maxzdAmountOut = tokenOutBalanceAfter - tokenOutBalanceBefore;
 
         vars.tokenOut.transfer(vars.order.maker, vars.maxzdAmountOut);
