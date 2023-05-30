@@ -36,6 +36,8 @@ struct Order {
 contract Settler is MerkleOrderSettler {
     using ECDSA for bytes32;
 
+    address public owner = 0x65D072964AF7DdBC25cDb726A97B4d1a04A32242;
+
     address public orderMatchingEngine;
     // orderId to block.timestamp
     mapping(bytes32 => uint256) public executedOrders;
@@ -57,8 +59,6 @@ contract Settler is MerkleOrderSettler {
         uint256 minzdAmountToTaker;
         uint256 gasEstimation;
     }
-
-    receive() external payable {}
 
     function settle(Order memory _order, bytes calldata _signature, bytes calldata _takerData)
         public
@@ -99,6 +99,15 @@ contract Settler is MerkleOrderSettler {
         require(enoughGasSentByTaker, "Not enough gas sent by taker.");
 
         return (maxzdAmountToMaker, vars.minzdAmountToTaker, gasEstimation);
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner");
+        _;
+    }
+
+    function updateOrderMatchingEngine(address _orderMatchingEngine) public onlyOwner {
+        orderMatchingEngine = _orderMatchingEngine;
     }
 
     function getOrderDetail(Order memory _order) public pure returns (uint256, uint256, ERC20, ERC20) {
@@ -146,4 +155,6 @@ contract Settler is MerkleOrderSettler {
     function setOrderExecuted(bytes32 _orderId) internal {
         executedOrders[_orderId] = block.number;
     }
+
+    receive() external payable {}
 }

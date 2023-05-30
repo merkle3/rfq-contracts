@@ -22,6 +22,17 @@ contract MerkleOrderSettlerTest is Test {
         taker = new Taker();
     }
 
+    function testOnlyOwnerUpdateOrderMatchingEngine() public {
+        vm.expectRevert("Only owner");
+        merkleOrderSettler.updateOrderMatchingEngine(address(0x1));
+    }
+
+    function testUpdateOrderMatchingEngine() public {
+        vm.prank(0x65D072964AF7DdBC25cDb726A97B4d1a04A32242);
+        merkleOrderSettler.updateOrderMatchingEngine(address(0x1));
+        assertEq(address(0x1), merkleOrderSettler.orderMatchingEngine());
+    }
+
     function testInvalidSignature() public {
         // expect revert since signer does not match the private key used to sign
         vm.expectRevert("Invalid Signature");
