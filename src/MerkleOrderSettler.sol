@@ -26,6 +26,7 @@ struct Order {
     uint256 amountIn;
     address tokenOut;
     uint256 amountOut;
+    uint256 expiration;
     bool maximizeOut;
 }
 
@@ -64,8 +65,9 @@ contract MerkleOrderSettler {
     )
         public
         onlyOrderMatchingEngine
-        notExecutedOrders(_order.id)
         onlyValidSignatures(_order, _signature)
+        notExecutedOrders(_order.id)
+        notExpiredOrders(_order.expiration)
         returns (uint256, uint256)
     {
         uint256 ethBalanceBefore = address(this).balance;
@@ -77,7 +79,7 @@ contract MerkleOrderSettler {
 
         // maker sends tokenIn and receives tokenOut
         (vars.minzdAmountIn, vars.tokenIn, vars.tokenOut) =
-            (_order.amountIn, ERC20(_order.tokenIn), ERC20(_order.tokenOut));
+            (_order.amountIn, ERC20(vars.order.tokenIn), ERC20(vars.order.tokenOut));
 
         // Pull taker tokens out from maker and send to taker, assume erc20.approve is already called
         vars.tokenIn.transferFrom(vars.order.maker, vars.order.taker, vars.minzdAmountIn);
@@ -124,6 +126,11 @@ contract MerkleOrderSettler {
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner");
+        _;
+    }
+
+    modifier notExpiredOrders(uint256 expiration) {
+        require(block.timestamp <= expiration, "Order expired.");
         _;
     }
 

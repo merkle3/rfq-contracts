@@ -63,7 +63,8 @@ contract MerkleOrderSettlerTest is Test {
             amountIn: 0,
             tokenOut: address(0),
             amountOut: 0,
-            maximizeOut: false
+            maximizeOut: false,
+            expiration: uint256(0)
         });
         return order;
     }
@@ -101,6 +102,7 @@ contract MerkleOrderSettlerTest is Test {
         uint256 amountOut = 10 * 1e6; // taker needs to have this
 
         orderSetup(_maker, address(taker), usdc, usdt, amountIn, amountOut);
+        vm.warp(1641070800);
 
         Order memory order = Order({
             id: _orderId,
@@ -110,7 +112,8 @@ contract MerkleOrderSettlerTest is Test {
             amountIn: amountIn,
             tokenOut: usdt,
             amountOut: amountOut,
-            maximizeOut: true
+            maximizeOut: true,
+            expiration: uint256(1641070800)
         });
         return order;
     }
@@ -154,7 +157,7 @@ contract MerkleOrderSettlerTest is Test {
         } else {
             orderSetup(_maker, address(taker), wbtc, weth, amountOut, amountIn);
         }
-
+        vm.warp(1641070800);
         Order memory order = Order({
             id: _orderId,
             maker: _maker,
@@ -163,7 +166,8 @@ contract MerkleOrderSettlerTest is Test {
             amountIn: amountIn,
             tokenOut: wbtc,
             amountOut: amountOut,
-            maximizeOut: _maximizeOut
+            maximizeOut: _maximizeOut,
+            expiration: uint256(1641070800)
         });
         return order;
     }
