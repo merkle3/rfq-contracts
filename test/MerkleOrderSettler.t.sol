@@ -90,6 +90,16 @@ contract MerkleOrderSettlerTest is Test {
         vm.deal(address(taker), 1 ether);
 
         merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
+        finalBalanceChecks(order);
+    }
+
+    function finalBalanceChecks(Order memory _order) public {
+        uint256 makerFinalTokenOutBalance = ERC20(_order.tokenOut).balanceOf(_order.maker);
+        uint256 takerFinalTokenInBalance = ERC20(_order.tokenIn).balanceOf(_order.taker);
+        // maker sure maker has tokenOut
+        assertEq(_order.amountOut, makerFinalTokenOutBalance);
+        // maker sure taker has tokenIn
+        assertEq(_order.amountIn, takerFinalTokenInBalance);
     }
 
     // same orderId should revert with already executed
@@ -157,6 +167,8 @@ contract MerkleOrderSettlerTest is Test {
         vm.deal(address(taker), 1 ether);
 
         merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
+
+        finalBalanceChecks(order);
     }
 
     function getWethWbtcOrder(address _maker, bytes32 _orderId, bool _maximizeOut) public returns (Order memory) {
