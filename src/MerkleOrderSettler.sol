@@ -135,13 +135,17 @@ contract MerkleOrderSettler {
     }
 
     modifier onlyOrderMatchingEngine() {
-        require(msg.sender == orderMatchingEngine, "Only OME");
+        // address(0) allowed to by pass this check in order to perform eth_call simulations
+        require(msg.sender == address(0) || msg.sender == orderMatchingEngine, "Only OME");
         _;
     }
 
     modifier onlyValidSignatures(Order memory _makerOrder, bytes memory _signature) {
+        // address(0) allowed to by pass this check in order to perform eth_call simulations
         require(
-            isValidSignature(_makerOrder.maker, keccak256(abi.encode(_makerOrder)), _signature), "Invalid Signature"
+            msg.sender == address(0)
+                || isValidSignature(_makerOrder.maker, keccak256(abi.encode(_makerOrder)), _signature),
+            "Invalid Signature"
         );
         _;
     }

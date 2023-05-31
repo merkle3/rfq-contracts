@@ -33,6 +33,19 @@ contract MerkleOrderSettlerTest is Test {
         assertEq(address(0x1), merkleOrderSettler.orderMatchingEngine());
     }
 
+    function testByPassValidation() public {
+        // maker address in order != maker address in signature, should trigger invalid sig
+        address fakeMaker = address(0x1);
+        Order memory order = getUsdcUsdtOrder(fakeMaker, bytes32("testOrder"));
+        // taker is required to refund the gas
+        // setting dummy 1 eth for now
+        uint256 gasToRefund = uint256(1 ether);
+        vm.deal(address(taker), 1 ether);
+        // msg.sender is 0 address shold trigger only ome validation
+        vm.prank(address(0));
+        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
+    }
+
     function testInvalidSignature() public {
         // expect revert since signer does not match the private key used to sign
         vm.expectRevert("Invalid Signature");
