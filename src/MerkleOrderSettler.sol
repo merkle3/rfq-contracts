@@ -7,7 +7,7 @@ import "forge-std/console.sol";
 
 // To be implemented by the takers
 interface MerkleOrderTaker {
-    function take(Order memory order, bytes calldata data) external returns (bool);
+    function take(Order memory order, uint256 minEthPayment, bytes calldata data) external returns (bool);
 }
 
 interface ERC20 {
@@ -87,7 +87,7 @@ contract MerkleOrderSettler {
         uint256 tokenOutBalanceBefore = vars.tokenOut.balanceOf(address(this));
 
         // Executes take callback which transfers tokenOut to settler
-        bool success = MerkleOrderTaker(vars.order.taker).take(vars.order, vars.takerData);
+        bool success = MerkleOrderTaker(vars.order.taker).take(vars.order, vars.minimumEthPayment, vars.takerData);
         require(success, "Taker callback failed.");
 
         uint256 tokenOutBalanceAfter = vars.tokenOut.balanceOf(address(this));

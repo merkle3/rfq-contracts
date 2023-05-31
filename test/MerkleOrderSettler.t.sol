@@ -41,11 +41,11 @@ contract MerkleOrderSettlerTest is Test {
         Order memory order = getUsdcUsdtOrder(fakeMaker, bytes32("testOrder"));
         // taker is required to refund the gas
         // setting dummy 1 eth for now
-        uint256 gasToRefund = uint256(1 ether);
-        vm.deal(address(taker), 1 ether);
+        uint256 minEthPayment = uint256(1 ether);
+        vm.deal(address(taker), minEthPayment);
         // msg.sender is 0 address shold trigger only ome validation
         vm.prank(address(0));
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
+        merkleOrderSettler.settle(order, getSig(order), "0x", minEthPayment);
     }
 
     function testInvalidSignature() public {
@@ -88,10 +88,10 @@ contract MerkleOrderSettlerTest is Test {
         Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"));
         // taker is required to refund the gas
         // setting dummy 1 eth for now
-        uint256 gasToRefund = uint256(1 ether);
-        vm.deal(address(taker), 1 ether);
+        uint256 minEthPayment = uint256(1 ether);
+        vm.deal(address(taker), minEthPayment);
 
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
+        merkleOrderSettler.settle(order, getSig(order), "0x", minEthPayment);
         finalBalanceChecks(order);
     }
 
@@ -107,11 +107,12 @@ contract MerkleOrderSettlerTest is Test {
     // same orderId should revert with already executed
     function testNotExecutedOrders() public {
         Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"));
-        uint256 gasToRefund = uint256(1 ether);
-        vm.deal(address(taker), 1 ether);
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
+
+        uint256 minEthPayment = uint256(1 ether);
+        vm.deal(address(taker), minEthPayment);
+        merkleOrderSettler.settle(order, getSig(order), "0x", minEthPayment);
         vm.expectRevert("Already executed.");
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
+        merkleOrderSettler.settle(order, getSig(order), "0x", minEthPayment);
     }
 
     function getSig(Order memory order) public view returns (bytes memory) {
@@ -165,10 +166,10 @@ contract MerkleOrderSettlerTest is Test {
         Order memory order = getWethWbtcOrder(maker, bytes32("testOrder"), true);
         // taker is required to refund the gas
         // setting dummy 1 eth for now
-        uint256 gasToRefund = uint256(1 ether);
-        vm.deal(address(taker), 1 ether);
+        uint256 minEthPayment = uint256(1 ether);
+        vm.deal(address(taker), minEthPayment);
 
-        merkleOrderSettler.settle(order, getSig(order), abi.encodePacked(gasToRefund), 0);
+        merkleOrderSettler.settle(order, getSig(order), "0x", minEthPayment);
 
         finalBalanceChecks(order);
     }
