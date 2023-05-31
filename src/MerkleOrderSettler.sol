@@ -86,7 +86,7 @@ contract MerkleOrderSettler {
 
         uint256 tokenOutBalanceAfter = vars.tokenOut.balanceOf(address(this));
         // Assume we already simulated taker callback and we know the maxzdAmountToMaker that will be transfered in the callback
-        require(tokenOutBalanceAfter > tokenOutBalanceBefore, "Not enough tokenOut.");
+        require(tokenOutBalanceAfter > tokenOutBalanceBefore, "Not enough tokenOut received from taker.");
 
         vars.maxzdAmountOut = tokenOutBalanceAfter - tokenOutBalanceBefore;
 
@@ -97,10 +97,8 @@ contract MerkleOrderSettler {
             require(vars.maxzdAmountOut >= vars.order.amountOut, "Not enough tokenOut.");
         } else {
             require(vars.maxzdAmountOut == vars.order.amountOut, "Output must be what user expected.");
-            bool isTokenInDustLeft = vars.tokenIn.balanceOf(address(this)) > 0;
-            if (isTokenInDustLeft) {
-                vars.tokenIn.transfer(vars.order.maker, vars.tokenIn.balanceOf(address(this)));
-            }
+            clearDust(vars.tokenIn, vars.order.maker);
+            clearDust(vars.tokenOut, vars.order.taker);
         }
 
         // Minimum payment check
@@ -112,6 +110,14 @@ contract MerkleOrderSettler {
         setOrderExecuted(vars.order.id);
 
         return (vars.minzdAmountIn, vars.maxzdAmountOut);
+    }
+
+    function clearDust(ERC20 _erc20, address to) internal {
+        uint256 dust = _erc20.balanceOf(address(this));
+        bool dustToClear = dust > 0;
+        if (dustToClear) {
+            _erc20.transfer(to, dust);
+        }
     }
 
     function updateOrderMatchingEngine(address _orderMatchingEngine) public onlyOwner {
