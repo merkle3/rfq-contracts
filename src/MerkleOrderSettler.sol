@@ -7,7 +7,7 @@ import "forge-std/console.sol";
 
 // To be implemented by the takers
 interface MerkleOrderTaker {
-    function take(Order memory order, uint256 minEthPayment, bytes calldata data) external returns (bool);
+    function take(Order memory order, uint256 minPayment, bytes calldata data) external returns (bool);
 }
 
 interface ERC20 {
@@ -52,17 +52,11 @@ contract MerkleOrderSettler {
         ERC20 tokenOut;
         uint256 minzdAmountIn;
         uint256 maxzdAmountOut;
-        uint256 gasEstimation;
         bytes takerData;
-        uint256 minimumEthPayment;
+        uint256 minPayment;
     }
 
-    function settle(
-        Order memory _order,
-        bytes calldata _signature,
-        bytes calldata _takerData,
-        uint256 _minimumEthPayment
-    )
+    function settle(Order memory _order, bytes calldata _signature, bytes calldata _takerData, uint256 minPayment)
         public
         onlyOrderMatchingEngine
         onlyValidSignatures(_order, _signature)
@@ -70,12 +64,12 @@ contract MerkleOrderSettler {
         notExpiredOrders(_order.expiration)
         returns (uint256, uint256)
     {
-        uint256 ethBalanceBefore = address(this).balance;
+        uint256 balanceBefore = address(this).balance;
 
         SettleLocalVars memory vars;
         vars.order = _order;
         vars.takerData = _takerData;
-        vars.minimumEthPayment = _minimumEthPayment;
+        vars.minPayment = minPayment;
 
         // maker sends tokenIn and receives tokenOut
         (vars.minzdAmountIn, vars.tokenIn, vars.tokenOut) =
@@ -87,7 +81,7 @@ contract MerkleOrderSettler {
         uint256 tokenOutBalanceBefore = vars.tokenOut.balanceOf(address(this));
 
         // Executes take callback which transfers tokenOut to settler
-        bool success = MerkleOrderTaker(vars.order.taker).take(vars.order, vars.minimumEthPayment, vars.takerData);
+        bool success = MerkleOrderTaker(vars.order.taker).take(vars.order, vars.minPayment, vars.takerData);
         require(success, "Taker callback failed.");
 
         uint256 tokenOutBalanceAfter = vars.tokenOut.balanceOf(address(this));
@@ -110,10 +104,10 @@ contract MerkleOrderSettler {
         }
 
         // Minimum payment check
-        uint256 ethBalanceAfter = address(this).balance;
-        bool takerCoveredGasCosts = (ethBalanceAfter - ethBalanceBefore >= vars.minimumEthPayment);
+        uint256 balanceAfter = address(this).balance;
+        bool takerTransferedMinPayment = (balanceAfter - balanceBefore >= vars.minPayment);
 
-        require(takerCoveredGasCosts, "Taker payment did not cover minimum payment.");
+        require(takerTransferedMinPayment, "Taker payment did not cover minimum payment.");
 
         setOrderExecuted(vars.order.id);
 
