@@ -29,8 +29,10 @@ contract MerkleOrderSettlerTest is Test {
 
     function testUpdateOrderMatchingEngine() public {
         vm.prank(0x65D072964AF7DdBC25cDb726A97B4d1a04A32242);
-        merkleOrderSettler.updateOrderMatchingEngine(address(0x1));
-        assertEq(address(0x1), merkleOrderSettler.orderMatchingEngine());
+        address _orderMatchingEngine = address(0x1);
+        merkleOrderSettler.updateOrderMatchingEngine(_orderMatchingEngine);
+        bool isUpdated = merkleOrderSettler.getOrderMatchingEngine(_orderMatchingEngine);
+        assert(isUpdated);
     }
 
     function testByPassValidation() public {

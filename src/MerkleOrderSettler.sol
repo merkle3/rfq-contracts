@@ -35,14 +35,14 @@ contract MerkleOrderSettler {
 
     address public owner = 0x65D072964AF7DdBC25cDb726A97B4d1a04A32242;
 
-    address public orderMatchingEngine;
+    mapping(address => bool) orderMatchingEngine;
 
     // orderId to block.timestamp
     mapping(bytes32 => uint256) public executedOrders;
 
     constructor() {
-        // expecting deployer to be the order matching engine
-        orderMatchingEngine = msg.sender;
+        // enable deployer to call settle
+        orderMatchingEngine[msg.sender] = true;
     }
 
     // avoiding stack too deep error
@@ -121,7 +121,11 @@ contract MerkleOrderSettler {
     }
 
     function updateOrderMatchingEngine(address _orderMatchingEngine) public onlyOwner {
-        orderMatchingEngine = _orderMatchingEngine;
+        orderMatchingEngine[_orderMatchingEngine] = true;
+    }
+
+    function getOrderMatchingEngine(address _orderMatchingEngine) public view returns (bool) {
+        return orderMatchingEngine[_orderMatchingEngine];
     }
 
     modifier onlyOwner() {
@@ -136,7 +140,7 @@ contract MerkleOrderSettler {
 
     modifier onlyOrderMatchingEngine() {
         // address(0) allowed to by pass this check in order to perform eth_call simulations
-        require(msg.sender == address(0) || msg.sender == orderMatchingEngine, "Only OME");
+        require(msg.sender == address(0) || orderMatchingEngine[msg.sender], "Only OME");
         _;
     }
 
