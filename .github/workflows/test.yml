@@ -1,16 +1,13 @@
 name: test
 
-on: workflow_dispatch
-
-env:
-  FOUNDRY_PROFILE: ci
+on: [pull_request]
 
 jobs:
   check:
     strategy:
       fail-fast: true
 
-    name: Foundry project
+    name: Merkle Order Settlement tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -22,13 +19,5 @@ jobs:
         with:
           version: nightly
 
-      - name: Run Forge build
-        run: |
-          forge --version
-          forge build --sizes
-        id: build
-
       - name: Run Forge tests
-        run: |
-          forge test -vvv
-        id: test
+        run: FORK_URL="https://mainnet.infura.io/v3/7bb117a7f3ad464292087467a7c93fb8" forge test -vvv
