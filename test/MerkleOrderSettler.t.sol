@@ -125,7 +125,7 @@ contract MerkleOrderSettlerTest is Test {
         address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address usdt = 0xa47c8bf37f92aBed4A126BDA807A7b7498661acD;
         uint256 amountIn = 10 * 1e6; // maker needs to have this
-        uint256 amountOut = 10 * 1e6; // taker needs to have this
+        uint256 amountOut = 10.02 * 1e6; // taker needs to have this
 
         orderSetup(_maker, address(taker), usdc, usdt, amountIn, amountOut);
         vm.warp(1641070800);
@@ -177,14 +177,11 @@ contract MerkleOrderSettlerTest is Test {
     function getWethWbtcOrder(address _maker, bytes32 _orderId, bool _maximizeOut) public returns (Order memory) {
         address weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
         address wbtc = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
-        uint256 amountIn = 10 * 1e18; // maker needs to have this
-        uint256 amountOut = 10 * 1e8; // taker needs to have this
+        uint256 amountIn = 1 * 1e18; // maker needs to have this
+        uint256 amountOut = 0.5 * 1e8; // taker needs to have this
 
-        if (_maximizeOut) {
-            orderSetup(_maker, address(taker), weth, wbtc, amountIn, amountOut);
-        } else {
-            orderSetup(_maker, address(taker), wbtc, weth, amountOut, amountIn);
-        }
+        orderSetup(_maker, address(taker), weth, wbtc, amountIn, amountOut);
+
         vm.warp(1641070800);
         Order memory order = Order({
             id: _orderId,
