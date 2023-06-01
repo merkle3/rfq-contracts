@@ -95,10 +95,10 @@ contract MerkleOrderSettler {
         if (vars.order.maximizeOut) {
             // The output must be at least what the user expected
             require(vars.maxzdAmountOut >= vars.order.amountOut, "Not enough tokenOut.");
+            clearDust(vars.tokenOut, vars.order.taker);
         } else {
             require(vars.maxzdAmountOut == vars.order.amountOut, "Output must be what user expected.");
             clearDust(vars.tokenIn, vars.order.maker);
-            clearDust(vars.tokenOut, vars.order.taker);
         }
 
         // Minimum payment check
