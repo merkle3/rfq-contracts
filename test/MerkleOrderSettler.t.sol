@@ -38,7 +38,7 @@ contract MerkleOrderSettlerTest is Test {
     function testByPassValidation() public {
         // maker address in order != maker address in signature, should trigger invalid sig
         address fakeMaker = address(0x1);
-        Order memory order = getUsdcUsdtOrder(fakeMaker, bytes32("testOrder"));
+        Order memory order = getUsdcUsdtOrder(fakeMaker, bytes16("testOrder"));
         // taker is required to refund the gas
         // setting dummy 1 eth for now
         uint256 minEthPayment = uint256(1 ether);
@@ -51,13 +51,13 @@ contract MerkleOrderSettlerTest is Test {
     function testInvalidSignature() public {
         // expect revert since signer does not match the private key used to sign
         vm.expectRevert("Invalid Signature");
-        Order memory order = getDummyOrder(address(0x1), bytes32("testOrder"));
+        Order memory order = getDummyOrder(address(0x1), bytes16("testOrder"));
         merkleOrderSettler.settle(order, getSig(order), "0x", 0);
     }
 
     function testSignerZeroAddr() public {
         vm.expectRevert("Invalid Signature");
-        Order memory order = getDummyOrder(address(0), bytes32("testOrder"));
+        Order memory order = getDummyOrder(address(0), bytes16("testOrder"));
         merkleOrderSettler.settle(order, getSig(order), "0x", 0);
     }
 
@@ -65,11 +65,11 @@ contract MerkleOrderSettlerTest is Test {
         // only Order Matching Engine can call fillOrder
         vm.expectRevert("Only OME");
         vm.prank(address(0x1));
-        Order memory order = getDummyOrder(maker, bytes32("testOrder"));
+        Order memory order = getDummyOrder(maker, bytes16("testOrder"));
         merkleOrderSettler.settle(order, getSig(order), "0x", 0);
     }
 
-    function getDummyOrder(address makerAddr, bytes32 orderId) public pure returns (Order memory) {
+    function getDummyOrder(address makerAddr, bytes16 orderId) public pure returns (Order memory) {
         Order memory order = Order({
             id: orderId,
             maker: makerAddr,
@@ -85,7 +85,7 @@ contract MerkleOrderSettlerTest is Test {
     }
 
     function testValidUsdcUsdtSettle() public {
-        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"));
+        Order memory order = getUsdcUsdtOrder(maker, bytes16("testOrder"));
         // taker is required to refund the gas
         // setting dummy 1 eth for now
         uint256 minEthPayment = uint256(1 ether);
@@ -106,7 +106,7 @@ contract MerkleOrderSettlerTest is Test {
 
     // same orderId should revert with already executed
     function testNotExecutedOrders() public {
-        Order memory order = getUsdcUsdtOrder(maker, bytes32("testOrder"));
+        Order memory order = getUsdcUsdtOrder(maker, bytes16("testOrder"));
 
         uint256 minEthPayment = uint256(1 ether);
         vm.deal(address(taker), minEthPayment);
@@ -121,7 +121,7 @@ contract MerkleOrderSettlerTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function getUsdcUsdtOrder(address _maker, bytes32 _orderId) public returns (Order memory) {
+    function getUsdcUsdtOrder(address _maker, bytes16 _orderId) public returns (Order memory) {
         address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address usdt = 0xa47c8bf37f92aBed4A126BDA807A7b7498661acD;
         uint256 amountIn = 10 * 1e6; // maker needs to have this
@@ -163,7 +163,7 @@ contract MerkleOrderSettlerTest is Test {
     }
 
     function testValidWethWbtcSettle() public {
-        Order memory order = getWethWbtcOrder(maker, bytes32("testOrder"), true);
+        Order memory order = getWethWbtcOrder(maker, bytes16("testOrder"), true);
         // taker is required to refund the gas
         // setting dummy 1 eth for now
         uint256 minEthPayment = uint256(1 ether);
@@ -174,7 +174,7 @@ contract MerkleOrderSettlerTest is Test {
         finalBalanceChecks(order);
     }
 
-    function getWethWbtcOrder(address _maker, bytes32 _orderId, bool _maximizeOut) public returns (Order memory) {
+    function getWethWbtcOrder(address _maker, bytes16 _orderId, bool _maximizeOut) public returns (Order memory) {
         address weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
         address wbtc = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
         uint256 amountIn = 1 * 1e18; // maker needs to have this

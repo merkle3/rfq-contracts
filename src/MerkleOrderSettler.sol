@@ -19,7 +19,7 @@ interface ERC20 {
 }
 
 struct Order {
-    bytes32 id;
+    bytes16 id;
     address maker;
     address taker;
     address tokenIn;
@@ -38,7 +38,7 @@ contract MerkleOrderSettler {
     mapping(address => bool) orderMatchingEngine;
 
     // orderId to block.timestamp
-    mapping(bytes32 => uint256) public executedOrders;
+    mapping(bytes16 => uint256) public executedOrders;
 
     constructor() {
         // enable deployer to call settle
@@ -158,14 +158,14 @@ contract MerkleOrderSettler {
         return _hash.recover(_signature) == _signer;
     }
 
-    modifier notExecutedOrders(bytes32 _orderId) {
+    modifier notExecutedOrders(bytes16 _orderId) {
         bool notExecuted = executedOrders[_orderId] == 0;
         require(notExecuted, "Already executed.");
 
         _;
     }
 
-    function setOrderExecuted(bytes32 _orderId) internal {
+    function setOrderExecuted(bytes16 _orderId) internal {
         executedOrders[_orderId] = block.number;
     }
 
