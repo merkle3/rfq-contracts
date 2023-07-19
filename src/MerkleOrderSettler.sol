@@ -83,8 +83,8 @@ contract MerkleOrderSettler is EIP712 {
         // token data
         ERC20 tokenIn;
         ERC20 tokenOut;
-        uint256 minzdAmountIn;
-        uint256 maxzdAmountOut;
+        uint256 amountIn;
+        uint256 amountOut;
 
         // filler data
         address taker;
@@ -180,22 +180,17 @@ contract MerkleOrderSettler is EIP712 {
         vars.orderHash = getOrderHash(vars.order);
 
         // maker sends tokenIn and receives tokenOut
-        (vars.minzdAmountIn, vars.tokenIn, vars.tokenOut) =
+        (vars.amountIn, vars.tokenIn, vars.tokenOut) =
             (_order.amountIn, ERC20(vars.order.tokenIn), ERC20(vars.order.tokenOut));
-
-        if (!order.maximizeOut) {
-            vars.minzdAmountIn = bid;
-        }
 
         // ------- TRANSFER INPUT TOKEN ------
 
         // save output balance before the callback
         uint256 tokenOutBalanceBefore = vars.tokenOut.balanceOf(address(this));
-        uint256 tokenInBalanceBefore = vars.tokenIn.balanceOf(address(this));
 
         // (1) if we are minimizing input, we still need to transfer and the filler will send the max amount that can be used
         // (2) if we are maximizing output, we need to transfer the amount in that can be used by the filler
-        vars.tokenIn.transferFrom(vars.order.maker, vars.taker, vars.minzdAmountIn);
+        vars.tokenIn.transferFrom(vars.order.maker, vars.taker, vars.amountIn);
 
         // ------- PERFORM CALLBACK -------
 
@@ -215,26 +210,29 @@ contract MerkleOrderSettler is EIP712 {
         require(tokenOutBalanceAfter > tokenOutBalanceBefore, "OUTPUT_ZERO");
 
         // calculate the output we got
-        vars.maxzdAmountOut = tokenOutBalanceAfter - tokenOutBalanceBefore;
+        vars.amountOut = tokenOutBalanceAfter - tokenOutBalanceBefore;
 
         // calculate how much input we used
-        vars.minzdAmountIn = tokenInBalanceBefore - tokenInBalanceAfter;
+        vars.amountIn = vars.amountIn - tokenInBalanceAfter;
 
         // transfer the output to the maker
-        vars.tokenOut.transfer(vars.order.maker, vars.maxzdAmountOut);
+        vars.tokenOut.transfer(vars.order.maker, vars.amountOut);
+
+        // return the input amount not consumed by the filler
+        if (tokenInBalanceAfter > 0) {
+            // clear the dust back to the user
+            vars.tokenIn.transfer(vars.order.maker, tokenInBalanceAfter);
+        }
 
         if (vars.order.maximizeOut) {
             // the output must be at least what the user expected
-            require(vars.maxzdAmountOut >= bid, "Not enough tokenOut.");
+            require(vars.amountOut >= bid, "Not enough tokenOut.");
         } else {
             // make sure the output is exactly what the user expected
-            require(vars.maxzdAmountOut == vars.order.amountOut, "Output must be what user expected.");
+            require(vars.amountOut == vars.order.amountOut, "Output must be what user expected.");
 
-            // return the input amount not consumed by the filler
-            if (tokenInBalanceAfter > 0) {
-                // clear the dust back to the user
-                vars.tokenIn.transfer(vars.order.maker, tokenInBalanceAfter);
-            }
+            // make sure we didn't use more input token than the user expected
+            require(vars.amountIn <= bid, "Input must be what user expected.");
         }
 
         // payment check
@@ -261,9 +259,9 @@ contract MerkleOrderSettler is EIP712 {
         // mark the order as executed
         _setOrderExecuted(vars.orderHash);
 
-        emit OrderExecuted(vars.orderHash, vars.minzdAmountIn, vars.maxzdAmountOut);
+        emit OrderExecuted(vars.orderHash, vars.amountIn, vars.amountOut);
 
-        return (vars.minzdAmountIn, vars.maxzdAmountOut);
+        return (vars.amountIn, vars.amountOut);
     }
 
     // checks that the order has not expired
