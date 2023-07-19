@@ -62,7 +62,7 @@ contract MerkleOrderSettler is EIP712 {
     mapping(address => bool) public orderMatchingEngine;
 
     // orderId to block.timestamp
-    mapping(bytes16 => bool) public executedOrders;
+    mapping(bytes32 => bool) public executedOrders;
 
     // authorized swappers for makers
     mapping(address => mapping(address => bool)) public authorizedSwappers;
@@ -75,6 +75,7 @@ contract MerkleOrderSettler is EIP712 {
     // avoiding stack too deep error
     struct SettleLocalVars {
         Order order;
+        bytes32 orderHash;
 
         // token data
         ERC20 tokenIn;
@@ -89,7 +90,7 @@ contract MerkleOrderSettler is EIP712 {
     }
 
     // events
-    event OrderExecuted(bytes16 indexed orderId, uint256 input, uint256 output);
+    event OrderExecuted(bytes32 indexed orderHash, uint256 input, uint256 output);
 
     /**
      * @notice Settles an order from the RFQ
@@ -110,19 +111,28 @@ contract MerkleOrderSettler is EIP712 {
         onlyOrderMatchingEngine
         notExpiredOrders(_order.expiration)
         _notExecutedOrders(_order)
-        onlyValidSignatures(_order, _signature)
         returns (uint256, uint256)
     {
+            // log sender
+            console.log("msg.sender", msg.sender);
+            
+        // if the caller is not address(0) then it's not a simulation and 
+        // we must validate the signature for the order
+        if (msg.sender != address(0)) {
+
+            require(_confirmSignature(_order, _signature), "Invalid Signature");
+        }
+
         // keep track of the balance before the settlement to track filler payment
         uint256 balanceBefore = address(this).balance;
 
         SettleLocalVars memory vars;
-        bytes32 orderHash = getOrderHash(_order);
 
         vars.order = _order;
         vars.takerData = _takerData;
         vars.taker = taker;
         vars.minPayment = minPayment;
+        vars.orderHash = getOrderHash(vars.order);
 
         // maker sends tokenIn and receives tokenOut
         (vars.minzdAmountIn, vars.tokenIn, vars.tokenOut) =
@@ -136,12 +146,12 @@ contract MerkleOrderSettler is EIP712 {
 
         // (1) if we are minimizing input, we still need to transfer and the filler will send the max amount that can be used
         // (2) if we are maximizing output, we need to transfer the amount in that can be used by the filler
-        vars.tokenIn.transferFrom(vars.order.maker, vars.order.taker, vars.minzdAmountIn);
+        vars.tokenIn.transferFrom(vars.order.maker, vars.taker, vars.minzdAmountIn);
 
         // ------- PERFORM CALLBACK -------
 
         // executes take callback which transfers tokenOut to settler
-        bool success = MerkleOrderTaker(taker).take(vars.order, vars.minPayment, vars.takerData);
+        bool success = MerkleOrderTaker(vars.taker).take(vars.order, vars.minPayment, vars.takerData);
 
         // check that the callback succeeded
         require(success, "Taker callback failed.");
@@ -185,7 +195,9 @@ contract MerkleOrderSettler is EIP712 {
         require(totalPayment >= vars.minPayment, "TAKER_UNDERPAID");
 
         // mark the order as executed
-        setOrderExecuted(orderHash);
+        _setOrderExecuted(vars.orderHash);
+
+        emit OrderExecuted(vars.orderHash, vars.minzdAmountIn, vars.maxzdAmountOut);
 
         return (vars.minzdAmountIn, vars.maxzdAmountOut);
     }
@@ -209,29 +221,16 @@ contract MerkleOrderSettler is EIP712 {
         _;
     }
 
-    // checks that the signature is valid
-    modifier onlyValidSignatures(Order memory _makerOrder, bytes memory _signature) {
-        // address(0) allowed to bypass this check in order to perform eth_call simulations
-        require(
-            // if the sender is address(0), it's a simulation 
-            msg.sender == address(0) 
-            // otherwise confirm the signature is valid
-            || _confirmSignature(_makerOrder, _signature), 
-        "Invalid Signature");
-
-        _;
-    }
-
     /**
      * @notice Returns the hash for an order
-     * @param Order The order to hash
+     * @param _order The order to hash
      */
-    function getOrderHash(Order memory _order) public pure returns (bytes32 orderHash) {
+    function getOrderHash(Order memory _order) public view returns (bytes32 orderHash) {
         orderHash = _hashTypedDataV4(
             keccak256(
                 abi.encode(
                     keccak256(
-                        "Order(address maker, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut, uint256 expiration,bool maximizeOut)"
+                        "Order(address maker,address tokenIn,uint256 amountIn,address tokenOut,uint256 amountOut,uint256 expiration,bool maximizeOut)"
                     ),
                     _order.maker,
                     _order.tokenIn,
@@ -279,15 +278,16 @@ contract MerkleOrderSettler is EIP712 {
 
     /**
      * @notice makes an order as executed
-     * @param _order The order to check
+     * @param orderHash The order to check
      */
     function _setOrderExecuted(bytes32 orderHash) internal {
-        executedOrders[orderHash] = block.number;
+        executedOrders[orderHash] = true;
     }
 
     /**
      * @notice authorize a swapper
      * @param _swapper The address of the swapper
+     * @param isApproved The status of the swapper
      */
     function setApprovalForAll(address _swapper, bool isApproved) public {
         authorizedSwappers[msg.sender][_swapper] = isApproved;
