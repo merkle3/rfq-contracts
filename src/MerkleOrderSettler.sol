@@ -94,6 +94,10 @@ contract MerkleOrderSettler is EIP712 {
 
     // events
     event OrderExecuted(bytes32 indexed orderHash, uint256 input, uint256 output);
+    event AuthorizedSwapper(address indexed maker, address indexed swapper, bool status);
+    event GasDeposit(address indexed taker, uint256 amount);
+    event GasWithdraw(address indexed taker, address indexed to, uint256 amount);
+    event OrderMatchingEngine(address indexed orderMatchingEngine, bool status);
 
     /**
      * @notice Settles an order from the RFQ
@@ -351,6 +355,9 @@ contract MerkleOrderSettler is EIP712 {
      */
     function setApprovalForAll(address _swapper, bool isApproved) public {
         authorizedSwappers[msg.sender][_swapper] = isApproved;
+
+        // emit event
+        emit AuthorizedSwapper(msg.sender, _swapper, isApproved);
     }
 
     // --------------- ADMIN FUNCTIONS ---------------
@@ -362,6 +369,9 @@ contract MerkleOrderSettler is EIP712 {
      */
     function updateOrderMatchingEngine(address _orderMatchingEngine, bool status) public onlyOwner {
         orderMatchingEngine[_orderMatchingEngine] = status;
+
+        // emit event
+        emit OrderMatchingEngine(_orderMatchingEngine, status);
     }
 
     modifier onlyOwner() {
@@ -375,6 +385,9 @@ contract MerkleOrderSettler is EIP712 {
         prepaidGas[taker] = 0;
 
         dest.transfer(amount);
+
+        // emit event
+        emit GasWithdraw(taker, dest, amount);
     }
 
     // --------------- RECEIVE ETHER --------------- 
@@ -387,6 +400,9 @@ contract MerkleOrderSettler is EIP712 {
      */
     function depositGas(address taker) public payable {
         prepaidGas[taker] += msg.value;
+
+        // emit event
+        emit GasDeposit(taker, msg.value);
     }
 
     /**
@@ -399,5 +415,8 @@ contract MerkleOrderSettler is EIP712 {
 
         // careful, re-entrancy attack
         to.transfer(amount);
+
+        // emit event
+        emit GasWithdraw(msg.sender, to, amount);
     }
 }
