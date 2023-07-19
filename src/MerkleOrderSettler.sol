@@ -67,6 +67,9 @@ contract MerkleOrderSettler is EIP712 {
     // authorized swappers for makers
     mapping(address => mapping(address => bool)) public authorizedSwappers;
 
+    // prepaid gas for takers
+    mapping(address => uint256) public prepaidGas;
+
     constructor(string memory name, string memory version) EIP712(name, version) {
         // enable deployer to call settle
         orderMatchingEngine[msg.sender] = true;
@@ -101,11 +104,18 @@ contract MerkleOrderSettler is EIP712 {
      * @param minPayment The minimum payment, in native token, that the taker must pay before the callback is done
      */
     function settle(
-        Order memory _order, 
+        // the order
+        Order memory _order,
+        // the order signature 
         bytes calldata _signature, 
+        // the taker address
         address taker,
+        // the taker calldata
         bytes calldata _takerData, 
-        uint256 minPayment
+        // the minimum native payment
+        uint256 minPayment,
+        // the bid amount, verified on chain
+        uint256 bid
     )
         public
         onlyOrderMatchingEngine
@@ -113,16 +123,47 @@ contract MerkleOrderSettler is EIP712 {
         _notExecutedOrders(_order)
         returns (uint256, uint256)
     {
-            // log sender
-            console.log("msg.sender", msg.sender);
-            
-        // if the caller is not address(0) then it's not a simulation and 
+        // if the caller is not address(0) or the settler contract 
+        // then it's not a simulation and 
         // we must validate the signature for the order
         if (msg.sender != address(0)) {
-
             require(_confirmSignature(_order, _signature), "Invalid Signature");
         }
 
+        return _executeOrder(_order, taker, _takerData, bid, minPayment);
+    }
+
+    // simulate a settlement
+    function settle(
+        Order memory _order, 
+        // for maximize out, the output amount, for minimize in, the input amount
+        uint256 bid,
+        address taker,
+        bytes calldata _takerData
+    ) public returns (uint256 tokenInAmount, uint256 tokenOutAmount, uint256 minPayment) {
+        // can only be called by null address for simulation
+        require(msg.sender == address(0), "SIMULATION_ONLY");
+
+        uint256 gasBefore = gasleft();
+
+        (tokenInAmount, tokenOutAmount) = _executeOrder(_order, taker, _takerData, bid, 0);
+
+        minPayment = (gasBefore - gasleft() + 30000) * (block.basefee);
+    }
+
+    // execute an order, internal function
+    function _executeOrder(
+        // the order
+        Order memory _order, 
+        // the taker address
+        address taker,
+        // the taker calldata
+        bytes calldata _takerData, 
+        // payment to verify
+        uint256 minPayment,
+        // for maximize out, the output amount, for minimize in, the input amount
+        uint256 bid
+    ) internal returns (uint256, uint256) {
         // keep track of the balance before the settlement to track filler payment
         uint256 balanceBefore = address(this).balance;
 
@@ -137,6 +178,10 @@ contract MerkleOrderSettler is EIP712 {
         // maker sends tokenIn and receives tokenOut
         (vars.minzdAmountIn, vars.tokenIn, vars.tokenOut) =
             (_order.amountIn, ERC20(vars.order.tokenIn), ERC20(vars.order.tokenOut));
+
+        if (!order.maximizeOut) {
+            vars.minzdAmountIn = bid;
+        }
 
         // ------- TRANSFER INPUT TOKEN ------
 
@@ -176,7 +221,7 @@ contract MerkleOrderSettler is EIP712 {
 
         if (vars.order.maximizeOut) {
             // the output must be at least what the user expected
-            require(vars.maxzdAmountOut >= vars.order.amountOut, "Not enough tokenOut.");
+            require(vars.maxzdAmountOut >= bid, "Not enough tokenOut.");
         } else {
             // make sure the output is exactly what the user expected
             require(vars.maxzdAmountOut == vars.order.amountOut, "Output must be what user expected.");
@@ -190,6 +235,21 @@ contract MerkleOrderSettler is EIP712 {
 
         // payment check
         uint256 totalPayment = address(this).balance - balanceBefore;
+
+        // if the total payment is less than min payment, check if there is enough prepaid gas
+        if (totalPayment < vars.minPayment) {
+            // the taker must refund the difference
+            uint256 missingPayment = vars.minPayment - totalPayment;
+
+            // the taker must have enough prepaid gas to refund
+            require(prepaidGas[vars.taker] >= missingPayment, "TAKER_UNDERPAID");
+
+            // debit prepaid gas
+            prepaidGas[vars.taker] -= missingPayment;
+
+            // update the total payment
+            totalPayment = vars.minPayment;
+        }
 
         // the taker must pay at least the minimum payment
         require(totalPayment >= vars.minPayment, "TAKER_UNDERPAID");
@@ -309,7 +369,35 @@ contract MerkleOrderSettler is EIP712 {
         _;
     }
 
+    // recover gas in case a taker fails to refund it
+    function recoverGas(address taker, address payable dest) public onlyOwner {
+        uint256 amount = prepaidGas[taker];
+        prepaidGas[taker] = 0;
+
+        dest.transfer(amount);
+    }
+
     // --------------- RECEIVE ETHER --------------- 
 
     receive() external payable {}
+
+    /**
+     * @notice deposit some gas that can be used to pay for min payment
+     * @param taker The address of the taker
+     */
+    function depositGas(address taker) public payable {
+        prepaidGas[taker] += msg.value;
+    }
+
+    /**
+     * @notice withdraw prepaid gas for taker
+     * @param to The address to withdraw to
+     */
+    function withdrawGas(address payable to) public {
+        uint256 amount = prepaidGas[msg.sender];
+        prepaidGas[msg.sender] = 0;
+
+        // careful, re-entrancy attack
+        to.transfer(amount);
+    }
 }
