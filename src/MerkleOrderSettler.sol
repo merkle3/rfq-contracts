@@ -140,8 +140,6 @@ contract MerkleOrderSettler is EIP712 {
     // simulate a settlement
     function settle(
         Order memory _order, 
-        // for maximize out, the output amount, for minimize in, the input amount
-        uint256 bid,
         address taker,
         bytes calldata _takerData
     ) public returns (uint256 tokenInAmount, uint256 tokenOutAmount, uint256 minPayment) {
@@ -149,6 +147,12 @@ contract MerkleOrderSettler is EIP712 {
         require(msg.sender == address(0), "SIMULATION_ONLY");
 
         uint256 gasBefore = gasleft();
+        uint256 bid = 0;
+
+        // suppose it's the worse bid possible
+        if (!_order.maximizeOut) {
+            bid = _order.amountIn;
+        }
 
         (tokenInAmount, tokenOutAmount) = _executeOrder(_order, taker, _takerData, bid, 0);
 
