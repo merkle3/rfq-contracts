@@ -19,7 +19,7 @@ interface ERC20 {
 }
 
 struct Order {
-    bytes32 id;
+    bytes16 id;
     address maker;
     address taker;
     address tokenIn;
@@ -30,7 +30,7 @@ struct Order {
     bool maximizeOut;
 }
 
-contract MerkleOrderSettler {
+contract MerkleOrderSettler is EIP712 {
     using ECDSA for bytes32;
 
     address public owner = 0x65D072964AF7DdBC25cDb726A97B4d1a04A32242;
@@ -38,9 +38,9 @@ contract MerkleOrderSettler {
     mapping(address => bool) orderMatchingEngine;
 
     // orderId to block.timestamp
-    mapping(bytes32 => uint256) public executedOrders;
+    mapping(bytes16 => uint256) public executedOrders;
 
-    constructor() {
+    constructor(string memory name, string memory version) EIP712(name, version) {
         // enable deployer to call settle
         orderMatchingEngine[msg.sender] = true;
     }
@@ -146,26 +146,41 @@ contract MerkleOrderSettler {
 
     modifier onlyValidSignatures(Order memory _makerOrder, bytes memory _signature) {
         // address(0) allowed to by pass this check in order to perform eth_call simulations
-        require(
-            msg.sender == address(0)
-                || isValidSignature(_makerOrder.maker, keccak256(abi.encode(_makerOrder)), _signature),
-            "Invalid Signature"
-        );
+        require(msg.sender == address(0) || isValidEIP712Signature(_makerOrder, _signature), "Invalid Signature");
         _;
     }
 
-    function isValidSignature(address _signer, bytes32 _hash, bytes memory _signature) internal pure returns (bool) {
-        return _hash.recover(_signature) == _signer;
+    function isValidEIP712Signature(Order memory _order, bytes memory _signature) internal view returns (bool) {
+        bytes32 digest = _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    keccak256(
+                        "Order(bytes16 id, address maker, address taker, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut, uint256 expiration,bool maximizeOut)"
+                    ),
+                    _order.id,
+                    _order.maker,
+                    _order.taker,
+                    _order.tokenIn,
+                    _order.amountIn,
+                    _order.tokenOut,
+                    _order.amountOut,
+                    _order.expiration,
+                    _order.maximizeOut
+                )
+            )
+        );
+        address signer = ECDSA.recover(digest, _signature);
+        return signer == _order.maker;
     }
 
-    modifier notExecutedOrders(bytes32 _orderId) {
+    modifier notExecutedOrders(bytes16 _orderId) {
         bool notExecuted = executedOrders[_orderId] == 0;
         require(notExecuted, "Already executed.");
 
         _;
     }
 
-    function setOrderExecuted(bytes32 _orderId) internal {
+    function setOrderExecuted(bytes16 _orderId) internal {
         executedOrders[_orderId] = block.number;
     }
 
