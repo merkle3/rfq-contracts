@@ -49,28 +49,35 @@ contract MerkleOrderSettlerTest is Test {
         vm.deal(address(taker), minEthPayment);
         // msg.sender is 0 address shold trigger only ome validation
         vm.prank(address(0));
-        merkleOrderSettler.settle(order, getEIP712Sig(order), address(taker), "0x", minEthPayment);
+        merkleOrderSettler.settle(order, bytes("0x"), address(taker), "0x", minEthPayment);
     }
 
     function testInvalidSignature() public {
         // expect revert since signer does not match the private key used to sign
-        vm.expectRevert("Invalid Signature");
         Order memory order = getDummyOrder(address(0x1));
-        merkleOrderSettler.settle(order, getEIP712Sig(order), address(taker), "0x", 0);
+        bytes memory sig = getEIP712Sig(order);
+        
+        vm.expectRevert("Invalid Signature");
+        merkleOrderSettler.settle(order, sig, address(taker), "0x", 0);
     }
 
     function testSignerZeroAddr() public {
-        vm.expectRevert("Invalid Signature");
         Order memory order = getDummyOrder(address(0));
-        merkleOrderSettler.settle(order, getEIP712Sig(order), address(taker), "0x", 0);
+        bytes memory sig = getEIP712Sig(order);
+
+        vm.expectRevert("Invalid Signature");
+        merkleOrderSettler.settle(order, sig, address(taker), "0x", 0);
     }
 
     function testOnlyOme() public {
         // only Order Matching Engine can call fillOrder
+        Order memory order = getDummyOrder(maker);
+        bytes memory sig = getEIP712Sig(order);
+
         vm.expectRevert("Only OME");
         vm.prank(address(0x1));
-        Order memory order = getDummyOrder(maker);
-        merkleOrderSettler.settle(order, getEIP712Sig(order), address(taker), "0x", 0);
+        
+        merkleOrderSettler.settle(order, sig, address(taker), "0x", 0);
     }
 
     function getDummyOrder(address makerAddr) public pure returns (Order memory) {
@@ -81,19 +88,21 @@ contract MerkleOrderSettlerTest is Test {
             tokenOut: address(0),
             amountOut: 0,
             maximizeOut: false,
-            expiration: uint256(0)
+            expiration: uint256(9999999999999999)
         });
         return order;
     }
 
     function testValidUsdcUsdtSettle() public {
         Order memory order = getUsdcUsdtOrder(maker);
+        bytes memory sig = getEIP712Sig(order);
+
         // taker is required to refund the gas
         // setting dummy 1 eth for now
         uint256 minEthPayment = uint256(1 ether);
         vm.deal(address(taker), minEthPayment);
 
-        merkleOrderSettler.settle(order, getEIP712Sig(order), address(taker), "0x", minEthPayment);
+        merkleOrderSettler.settle(order, sig, address(taker), "0x", minEthPayment);
         finalBalanceChecks(order);
     }
 
@@ -109,12 +118,14 @@ contract MerkleOrderSettlerTest is Test {
     // same orderId should revert with already executed
     function testNotExecutedOrders() public {
         Order memory order = getUsdcUsdtOrder(maker);
+        bytes memory sig = getEIP712Sig(order);
 
         uint256 minEthPayment = uint256(1 ether);
+
         vm.deal(address(taker), minEthPayment);
-        merkleOrderSettler.settle(order, getEIP712Sig(order), address(taker), "0x", minEthPayment);
+        merkleOrderSettler.settle(order, sig, address(taker), "0x", minEthPayment);
         vm.expectRevert("Already executed.");
-        merkleOrderSettler.settle(order, getEIP712Sig(order), address(taker), "0x", minEthPayment);
+        merkleOrderSettler.settle(order, sig, address(taker), "0x", minEthPayment);
     }
 
     function getSig(Order memory order) public view returns (bytes memory) {
