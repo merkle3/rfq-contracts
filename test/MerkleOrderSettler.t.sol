@@ -250,4 +250,39 @@ contract MerkleOrderSettlerTest is Test {
         vm.expectRevert("Invalid Signature");
         merkleOrderSettler.settle(new_order, sig, address(taker), bytes("0x"), minEthPayment, 1 * 1e6);
     }
+
+    function testTakerShouldBeAbleToManageGas() public {
+        address payable gasTaker = payable(vm.addr(1));
+        uint256 gasAmount = 100;
+        deal(gasTaker, gasAmount);
+        vm.startPrank(gasTaker);
+        merkleOrderSettler.depositGas{value: gasAmount}(gasTaker);
+        uint256 prepaidGas = merkleOrderSettler.prepaidGas(gasTaker);
+        assertEq(prepaidGas, gasAmount);
+        vm.startPrank(gasTaker);
+        merkleOrderSettler.withdrawGas(gasTaker);
+        vm.stopPrank();
+        assertEq(gasTaker.balance, gasAmount);
+        uint256 prepaidGasAfter = merkleOrderSettler.prepaidGas(gasTaker);
+        assertEq(prepaidGasAfter, 0);
+    }
+
+    function testOwnerShouldBeAbleToRecover() public {
+        address payable gasTaker = payable(vm.addr(1));
+        uint256 gasAmount = 100;
+        deal(gasTaker, gasAmount);
+        vm.startPrank(gasTaker);
+        merkleOrderSettler.depositGas{value: gasAmount}(gasTaker);
+        vm.stopPrank();
+
+        address payable here = payable(address(merkleOrderSettler));
+        vm.expectRevert("Only owner");
+        merkleOrderSettler.recoverGas(gasTaker, here);
+
+        address payable here_2 = payable(address(0x65D072964AF7DdBC25cDb726A97B4d1a04A32242));
+        deal(here_2, 0);
+        vm.prank(here_2);
+        merkleOrderSettler.recoverGas(gasTaker, here_2);
+        assertEq(here_2.balance, gasAmount);
+    }
 }

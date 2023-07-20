@@ -405,10 +405,8 @@ contract MerkleOrderSettler is EIP712 {
     function withdrawGas(address payable to) public {
         uint256 amount = prepaidGas[msg.sender];
         prepaidGas[msg.sender] = 0;
-
         // careful, re-entrancy attack
         to.transfer(amount);
-
         // emit event
         emit GasWithdraw(msg.sender, to, amount);
     }
