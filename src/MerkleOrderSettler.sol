@@ -66,6 +66,9 @@ contract MerkleOrderSettler is EIP712 {
     // prepaid gas for takers
     mapping(address => uint256) public prepaidGas;
 
+    // used prepaid gas
+    uint256 public usedPrepaidGas;
+
     constructor(string memory name, string memory version) EIP712(name, version) {
         // enable deployer to call settle
         orderMatchingEngine[msg.sender] = true;
@@ -243,6 +246,7 @@ contract MerkleOrderSettler is EIP712 {
 
             // debit prepaid gas
             prepaidGas[vars.taker] -= missingPayment;
+            usedPrepaidGas += missingPayment;
 
             // update the total payment
             totalPayment = vars.minPayment;
@@ -371,6 +375,14 @@ contract MerkleOrderSettler is EIP712 {
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner");
         _;
+    }
+
+    // withdraw fees
+    function withdraw(address payable dest) public onlyOwner {
+        uint256 amount = usedPrepaidGas;
+        usedPrepaidGas = 0;
+
+        dest.transfer(usedPrepaidGas);
     }
 
     // recover gas in case a taker fails to refund it
