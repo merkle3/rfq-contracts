@@ -49,16 +49,16 @@ contract MerkleOrderSettlerTest is Test {
         vm.deal(address(taker), minEthPayment);
         // msg.sender is 0 address shold trigger only ome validation
         vm.prank(address(0));
-        merkleOrderSettler.settle(order, bytes("0x"), address(taker), "0x", minEthPayment);
+        merkleOrderSettler.settle(order, address(taker), bytes("0x"));
     }
 
     function testInvalidSignature() public {
         // expect revert since signer does not match the private key used to sign
         Order memory order = getDummyOrder(address(0x1));
         bytes memory sig = getEIP712Sig(order);
-        
+
         vm.expectRevert("Invalid Signature");
-        merkleOrderSettler.settle(order, sig, address(taker), "0x", 0);
+        merkleOrderSettler.settle(order, sig, address(taker), bytes("0x"), 0, 100);
     }
 
     function testSignerZeroAddr() public {
@@ -66,7 +66,7 @@ contract MerkleOrderSettlerTest is Test {
         bytes memory sig = getEIP712Sig(order);
 
         vm.expectRevert("Invalid Signature");
-        merkleOrderSettler.settle(order, sig, address(taker), "0x", 0);
+        merkleOrderSettler.settle(order, sig, address(taker), bytes("0x"), 0, 100);
     }
 
     function testOnlyOme() public {
@@ -76,8 +76,8 @@ contract MerkleOrderSettlerTest is Test {
 
         vm.expectRevert("Only OME");
         vm.prank(address(0x1));
-        
-        merkleOrderSettler.settle(order, sig, address(taker), "0x", 0);
+
+        merkleOrderSettler.settle(order, sig, address(taker), bytes("0x"), 0, 100);
     }
 
     function getDummyOrder(address makerAddr) public pure returns (Order memory) {
@@ -102,7 +102,7 @@ contract MerkleOrderSettlerTest is Test {
         uint256 minEthPayment = uint256(1 ether);
         vm.deal(address(taker), minEthPayment);
 
-        merkleOrderSettler.settle(order, sig, address(taker), "0x", minEthPayment);
+        merkleOrderSettler.settle(order, sig, address(taker), bytes("0x"), minEthPayment, 10 * 1e6);
         finalBalanceChecks(order);
     }
 
@@ -123,9 +123,9 @@ contract MerkleOrderSettlerTest is Test {
         uint256 minEthPayment = uint256(1 ether);
 
         vm.deal(address(taker), minEthPayment);
-        merkleOrderSettler.settle(order, sig, address(taker), "0x", minEthPayment);
+        merkleOrderSettler.settle(order, sig, address(taker), bytes("0x"), minEthPayment, 10.02 * 1e6);
         vm.expectRevert("Already executed.");
-        merkleOrderSettler.settle(order, sig, address(taker), "0x", minEthPayment);
+        merkleOrderSettler.settle(order, sig, address(taker), bytes("0x"), minEthPayment, 10.02 * 1e6);
     }
 
     function getSig(Order memory order) public view returns (bytes memory) {
@@ -197,8 +197,8 @@ contract MerkleOrderSettlerTest is Test {
         // setting dummy 1 eth for now
         uint256 minEthPayment = uint256(1 ether);
         vm.deal(address(taker), minEthPayment);
-
-        merkleOrderSettler.settle(order, getEIP712Sig(order), address(taker), "0x", minEthPayment);
+        bytes memory sig = getEIP712Sig(order);
+        merkleOrderSettler.settle(order, sig, address(taker), bytes("0x"), minEthPayment, 1 * 1e6);
 
         finalBalanceChecks(order);
     }

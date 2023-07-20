@@ -9,15 +9,17 @@ import "forge-std/console.sol";
 interface MerkleOrderTaker {
     function take(
         // the order to fill
-        Order memory order, 
+        Order memory order,
         // the minimum payment, in native token, that the taker must pay before the callback is done
-        uint256 minPayment, 
+        uint256 minPayment,
         // the optional custom data that a taker can pass to their callback
         bytes calldata data
-    ) external returns (
-        // return true if everything worked
-        bool
-    );
+    )
+        external
+        returns (
+            // return true if everything worked
+            bool
+        );
 }
 
 // basic ERC20 interface
@@ -33,27 +35,21 @@ interface ERC20 {
 struct Order {
     // the order maker
     address maker;
-
     // the token in for the order
     address tokenIn;
-
     // only when maximizeOut=true, the amout in
     uint256 amountIn;
-
     // the output token expected
     address tokenOut;
-
     // only when maximizeOut=false, the amount of token out
     uint256 amountOut;
-
     // when the order expires, in seconds
     uint256 expiration;
-
     // when maximizeOut=true, the amount of tokenOut is maximized, otherwise the amount of tokenIn is minimized
     bool maximizeOut;
 }
 
-contract MerkleOrderSettler is EIP712 {
+contract MerkleOrdermaker is EIP712 {
     using ECDSA for bytes32;
 
     address public owner = 0x65D072964AF7DdBC25cDb726A97B4d1a04A32242;
@@ -79,14 +75,12 @@ contract MerkleOrderSettler is EIP712 {
     struct SettleLocalVars {
         Order order;
         bytes32 orderHash;
-
         // token data
         ERC20 tokenIn;
         ERC20 tokenOut;
         uint256 amountIn;
         uint256 amountOut;
-
-        // filler data
+        // taker data
         address taker;
         bytes takerData;
         uint256 minPayment;
@@ -104,18 +98,18 @@ contract MerkleOrderSettler is EIP712 {
      * @param _order The order to settle
      * @param _signature The signature of the order
      * @param taker The address of the taker
-     * @param _takerData The optional data to pass to the taker callback     
+     * @param _takerData The optional data to pass to the taker callback
      * @param minPayment The minimum payment, in native token, that the taker must pay before the callback is done
      */
     function settle(
         // the order
         Order memory _order,
-        // the order signature 
-        bytes calldata _signature, 
+        // the order signature
+        bytes calldata _signature,
         // the taker address
         address taker,
         // the taker calldata
-        bytes calldata _takerData, 
+        bytes calldata _takerData,
         // the minimum native payment
         uint256 minPayment,
         // the bid amount, verified on chain
@@ -127,26 +121,20 @@ contract MerkleOrderSettler is EIP712 {
         _notExecutedOrders(_order)
         returns (uint256, uint256)
     {
-        // if the caller is not address(0) or the settler contract 
-        // then it's not a simulation and 
-        // we must validate the signature for the order
-        if (msg.sender != address(0)) {
-            require(_confirmSignature(_order, _signature), "Invalid Signature");
-        }
+        require(_confirmSignature(_order, _signature), "Invalid Signature");
 
-        return _executeOrder(_order, taker, _takerData, bid, minPayment);
+        return _executeOrder(_order, taker, _takerData, minPayment, bid);
     }
 
     // simulate a settlement
-    function settle(
-        Order memory _order, 
-        address taker,
-        bytes calldata _takerData
-    ) public returns (uint256 tokenInAmount, uint256 tokenOutAmount, uint256 minPayment) {
+    function settle(Order memory _order, address taker, bytes calldata _takerData)
+        public
+        returns (uint256 tokenInAmount, uint256 tokenOutAmount, uint256 minPayment)
+    {
+        uint256 gasBefore = gasleft();
         // can only be called by null address for simulation
         require(msg.sender == address(0), "SIMULATION_ONLY");
 
-        uint256 gasBefore = gasleft();
         uint256 bid = 0;
 
         // suppose it's the worse bid possible
@@ -162,17 +150,17 @@ contract MerkleOrderSettler is EIP712 {
     // execute an order, internal function
     function _executeOrder(
         // the order
-        Order memory _order, 
+        Order memory _order,
         // the taker address
         address taker,
         // the taker calldata
-        bytes calldata _takerData, 
+        bytes calldata _takerData,
         // payment to verify
         uint256 minPayment,
         // for maximize out, the output amount, for minimize in, the input amount
         uint256 bid
     ) internal returns (uint256, uint256) {
-        // keep track of the balance before the settlement to track filler payment
+        // keep track of the balance before the settlement to track taker payment
         uint256 balanceBefore = address(this).balance;
 
         SettleLocalVars memory vars;
@@ -192,13 +180,13 @@ contract MerkleOrderSettler is EIP712 {
         // save output balance before the callback
         uint256 tokenOutBalanceBefore = vars.tokenOut.balanceOf(address(this));
 
-        // (1) if we are minimizing input, we still need to transfer and the filler will send the max amount that can be used
-        // (2) if we are maximizing output, we need to transfer the amount in that can be used by the filler
+        // (1) if we are minimizing input, we still need to transfer and the taker will send the max amount that can be used
+        // (2) if we are maximizing output, we need to transfer the amount in that can be used by the taker
         vars.tokenIn.transferFrom(vars.order.maker, vars.taker, vars.amountIn);
 
         // ------- PERFORM CALLBACK -------
 
-        // executes take callback which transfers tokenOut to settler
+        // executes take callback which transfers tokenOut to maker
         bool success = MerkleOrderTaker(vars.taker).take(vars.order, vars.minPayment, vars.takerData);
 
         // check that the callback succeeded
@@ -222,7 +210,7 @@ contract MerkleOrderSettler is EIP712 {
         // transfer the output to the maker
         vars.tokenOut.transfer(vars.order.maker, vars.amountOut);
 
-        // return the input amount not consumed by the filler
+        // return the input amount not consumed by the taker
         if (tokenInBalanceAfter > 0) {
             // clear the dust back to the user
             vars.tokenIn.transfer(vars.order.maker, tokenInBalanceAfter);
@@ -279,10 +267,11 @@ contract MerkleOrderSettler is EIP712 {
         // address(0) allowed to by pass this check in order to perform eth_call simulations
         require(
             // it's a simulation
-            msg.sender == address(0) 
+            msg.sender == address(0)
             // or the sender is an authorized order matching engine
-            || orderMatchingEngine[msg.sender], 
-        "Only OME");
+            || orderMatchingEngine[msg.sender],
+            "Only OME"
+        );
 
         _;
     }
@@ -317,9 +306,9 @@ contract MerkleOrderSettler is EIP712 {
      */
     function _confirmSignature(Order memory _order, bytes memory _signature) internal view returns (bool) {
         bytes32 orderHash = getOrderHash(_order);
-       
+
         address signer = ECDSA.recover(orderHash, _signature);
-        
+
         // if the signature is the maker, it's valid
         if (signer == _order.maker) {
             return true;
@@ -392,7 +381,7 @@ contract MerkleOrderSettler is EIP712 {
         emit GasWithdraw(taker, dest, amount);
     }
 
-    // --------------- RECEIVE ETHER --------------- 
+    // --------------- RECEIVE ETHER ---------------
 
     receive() external payable {}
 
