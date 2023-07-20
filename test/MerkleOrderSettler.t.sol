@@ -49,7 +49,11 @@ contract MerkleOrderSettlerTest is Test {
         vm.deal(address(taker), minEthPayment);
         // msg.sender is 0 address shold trigger only ome validation
         vm.prank(address(0));
-        merkleOrderSettler.settle(order, address(taker), bytes("0x"));
+        (uint256 tokenInAmount, uint256 tokenOutAmount, uint256 minPayment) =
+            merkleOrderSettler.settle(order, address(taker), bytes("0x"));
+        assertEq(tokenInAmount, order.amountIn);
+        assertEq(tokenOutAmount, order.amountOut);
+        assertEq(minPayment > 0, true);
     }
 
     function testInvalidSignature() public {

@@ -143,8 +143,10 @@ contract MerkleOrderSettler is EIP712 {
         }
 
         (tokenInAmount, tokenOutAmount) = _executeOrder(_order, taker, _takerData, bid, 0);
+        uint256 contingency = 30000;
+        uint256 gasUsed = gasBefore - gasleft() + contingency;
 
-        minPayment = (gasBefore - gasleft() + 30000) * (block.basefee);
+        minPayment = gasUsed * block.basefee;
     }
 
     // execute an order, internal function
