@@ -49,7 +49,7 @@ struct Order {
     bool maximizeOut;
 }
 
-contract MerkleOrdermaker is EIP712 {
+contract MerkleOrderSettler is EIP712 {
     using ECDSA for bytes32;
 
     address public owner = 0x65D072964AF7DdBC25cDb726A97B4d1a04A32242;
