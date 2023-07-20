@@ -188,7 +188,8 @@ contract MerkleOrderSettler is EIP712 {
 
         // ------- PERFORM CALLBACK -------
 
-        // executes take callback which transfers tokenOut to maker
+        // executes take callback which transfers tokenOut to settler
+        // then the settler transfers the token to the maker 
         bool success = MerkleOrderTaker(vars.taker).take(vars.order, vars.minPayment, vars.takerData);
 
         // check that the callback succeeded
