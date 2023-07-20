@@ -139,8 +139,12 @@ contract MerkleOrderSettlerTest is Test {
     }
 
     function getEIP712Sig(Order memory order) public view returns (bytes memory) {
+        return getEIP712SigFromPvtKey(order, makerPrivateKey);
+    }
+
+    function getEIP712SigFromPvtKey(Order memory order, uint256 pvtKey) public view returns (bytes memory) {
         bytes32 digest = merkleOrderSettler.getOrderHash(order);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(makerPrivateKey, digest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pvtKey, digest);
         return abi.encodePacked(r, s, v);
     }
 
@@ -226,5 +230,24 @@ contract MerkleOrderSettlerTest is Test {
             expiration: uint256(1641070800)
         });
         return order;
+    }
+
+    function testAuthorizedSwappers() public {
+        uint256 approvedSwapperPvtKey = 1;
+        address approvedSwapper = vm.addr(approvedSwapperPvtKey);
+        merkleOrderSettler.setApprovalForAll(approvedSwapper, true);
+
+        Order memory order = getWethWbtcOrder(maker, address(taker), true);
+        uint256 minEthPayment = uint256(1 ether);
+        vm.deal(address(taker), minEthPayment);
+
+        bytes memory sig = getEIP712SigFromPvtKey(order, approvedSwapperPvtKey);
+        merkleOrderSettler.settle(order, sig, address(taker), bytes("0x"), minEthPayment, 1 * 1e6);
+        finalBalanceChecks(order);
+
+        Order memory new_order = getWethWbtcOrder(address(0x3), address(taker), true);
+        merkleOrderSettler.setApprovalForAll(approvedSwapper, false);
+        vm.expectRevert("Invalid Signature");
+        merkleOrderSettler.settle(new_order, sig, address(taker), bytes("0x"), minEthPayment, 1 * 1e6);
     }
 }
