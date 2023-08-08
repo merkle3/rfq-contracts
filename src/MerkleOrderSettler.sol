@@ -3,24 +3,8 @@ pragma solidity ^0.8.13;
 
 import "openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./MerkleOrderTaker.sol";
 import "forge-std/console.sol";
-
-// To be implemented by the takers that fill the orders
-interface MerkleOrderTaker {
-    function take(
-        // the order to fill
-        Order memory order,
-        // the minimum payment, in native token, that the taker must pay before the callback is done
-        uint256 minPayment,
-        // the optional custom data that a taker can pass to their callback
-        bytes calldata data
-    )
-        external
-        returns (
-            // return true if everything worked
-            bool
-        );
-}
 
 // basic ERC20 interface
 interface ERC20 {
@@ -52,7 +36,7 @@ struct Order {
 contract MerkleOrderSettler is EIP712 {
     using ECDSA for bytes32;
 
-    address public owner = 0x65D072964AF7DdBC25cDb726A97B4d1a04A32242;
+    address public owner;
 
     // a mapping of authorized matching engine.
     mapping(address => bool) public orderMatchingEngine;
@@ -69,9 +53,12 @@ contract MerkleOrderSettler is EIP712 {
     // used prepaid gas
     uint256 public usedPrepaidGas;
 
-    constructor(string memory name, string memory version) EIP712(name, version) {
+    constructor(address _owner) EIP712("MerkleSwap", "1") {
         // enable deployer to call settle
         orderMatchingEngine[msg.sender] = true;
+
+        // set owner
+        owner = _owner;
     }
 
     // avoiding stack too deep error
@@ -377,17 +364,28 @@ contract MerkleOrderSettler is EIP712 {
         _;
     }
 
+    // set owner
+    function setOwner(address _owner) public onlyOwner {
+        owner = _owner;
+    } 
+
     // withdraw fees
     function withdraw(address payable dest) public onlyOwner {
         uint256 amount = usedPrepaidGas;
+        
+        // effects before transfer
         usedPrepaidGas = 0;
 
-        dest.transfer(usedPrepaidGas);
+        dest.transfer(amount);
     }
 
     // recover gas in case a taker fails to refund it
     function recoverGas(address taker, address payable dest) public onlyOwner {
+        require(dest != address(0), "Invalid address.");
+
         uint256 amount = prepaidGas[taker];
+
+        // effects before transfer
         prepaidGas[taker] = 0;
 
         dest.transfer(amount);
@@ -400,11 +398,15 @@ contract MerkleOrderSettler is EIP712 {
 
     receive() external payable {}
 
+    // --------------- PREPAID GAS -----------------
+
     /**
      * @notice deposit some gas that can be used to pay for min payment
      * @param taker The address of the taker
      */
     function depositGas(address taker) public payable {
+        require(taker != address(0), "Invalid address.");
+
         prepaidGas[taker] += msg.value;
 
         // emit event
@@ -415,12 +417,20 @@ contract MerkleOrderSettler is EIP712 {
      * @notice withdraw prepaid gas for taker
      * @param to The address to withdraw to
      */
-    function withdrawGas(address payable to) public {
+    function withdrawGas(address payable to, uint256 withdrawAmount) public {
+        require(to != address(0), "Invalid address.");
+
         uint256 amount = prepaidGas[msg.sender];
-        prepaidGas[msg.sender] = 0;
+
+        require(amount >= withdrawAmount, "No enough prepaid gas.");
+
+        // effects before transfer
+        prepaidGas[msg.sender] = amount - withdrawAmount;
+
         // careful, re-entrancy attack
-        to.transfer(amount);
+        to.transfer(withdrawAmount);
+
         // emit event
-        emit GasWithdraw(msg.sender, to, amount);
+        emit GasWithdraw(msg.sender, to, withdrawAmount);
     }
 }

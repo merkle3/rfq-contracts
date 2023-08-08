@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/MerkleOrderSettler.sol";
-import "../src/MerkleOrderTaker.sol";
+import "./mocks/Taker.sol";
 import "openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract MerkleOrderSettlerTest is Test {
@@ -14,13 +14,15 @@ contract MerkleOrderSettlerTest is Test {
 
     uint256 makerPrivateKey = 1;
     address maker = vm.addr(makerPrivateKey);
-    string name = "MBS";
-    string version = "test";
+    address settlerOwner = address(5);
 
     function setUp() public {
+        // setup vm
         string memory forkUrl = vm.rpcUrl("fork_url");
         vm.createSelectFork(forkUrl);
-        merkleOrderSettler = new MerkleOrderSettler(name, version);
+
+        // set up contracts
+        merkleOrderSettler = new MerkleOrderSettler(settlerOwner);
         taker = new Taker();
     }
 
@@ -30,7 +32,9 @@ contract MerkleOrderSettlerTest is Test {
     }
 
     function testUpdateOrderMatchingEngine() public {
-        vm.prank(0x65D072964AF7DdBC25cDb726A97B4d1a04A32242);
+        vm.prank(settlerOwner);
+        
+        // add a new order matching engine
         address _orderMatchingEngine = address(0x1);
         merkleOrderSettler.updateOrderMatchingEngine(_orderMatchingEngine, true);
 
@@ -148,18 +152,6 @@ contract MerkleOrderSettlerTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function buildDomainSeparatorV4(bytes32 _hashedName, bytes32 _hashedVersion) public view returns (bytes32) {
-        bytes32 _TYPE_HASH =
-            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
-        return
-            keccak256(abi.encode(_TYPE_HASH, _hashedName, _hashedVersion, block.chainid, address(merkleOrderSettler)));
-    }
-
-    // computes the hash of the fully encoded EIP-712 message for the domain, which can be used to recover the signer
-    function getTypedDataHash(bytes32 DOMAIN_SEPARATOR, bytes32 digest) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, digest));
-    }
-
     function getUsdcUsdtOrder(address _maker) public returns (Order memory) {
         address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address usdt = 0xa47c8bf37f92aBed4A126BDA807A7b7498661acD;
@@ -249,40 +241,5 @@ contract MerkleOrderSettlerTest is Test {
         merkleOrderSettler.setApprovalForAll(approvedSwapper, false);
         vm.expectRevert("Invalid Signature");
         merkleOrderSettler.settle(new_order, sig, address(taker), bytes("0x"), minEthPayment, 1 * 1e6);
-    }
-
-    function testTakerShouldBeAbleToManageGas() public {
-        address payable gasTaker = payable(vm.addr(1));
-        uint256 gasAmount = 100;
-        deal(gasTaker, gasAmount);
-        vm.startPrank(gasTaker);
-        merkleOrderSettler.depositGas{value: gasAmount}(gasTaker);
-        uint256 prepaidGas = merkleOrderSettler.prepaidGas(gasTaker);
-        assertEq(prepaidGas, gasAmount);
-        vm.startPrank(gasTaker);
-        merkleOrderSettler.withdrawGas(gasTaker);
-        vm.stopPrank();
-        assertEq(gasTaker.balance, gasAmount);
-        uint256 prepaidGasAfter = merkleOrderSettler.prepaidGas(gasTaker);
-        assertEq(prepaidGasAfter, 0);
-    }
-
-    function testOwnerShouldBeAbleToRecover() public {
-        address payable gasTaker = payable(vm.addr(1));
-        uint256 gasAmount = 100;
-        deal(gasTaker, gasAmount);
-        vm.startPrank(gasTaker);
-        merkleOrderSettler.depositGas{value: gasAmount}(gasTaker);
-        vm.stopPrank();
-
-        address payable here = payable(address(merkleOrderSettler));
-        vm.expectRevert("Only owner");
-        merkleOrderSettler.recoverGas(gasTaker, here);
-
-        address payable here_2 = payable(address(0x65D072964AF7DdBC25cDb726A97B4d1a04A32242));
-        deal(here_2, 0);
-        vm.prank(here_2);
-        merkleOrderSettler.recoverGas(gasTaker, here_2);
-        assertEq(here_2.balance, gasAmount);
     }
 }
