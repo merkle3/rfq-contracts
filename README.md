@@ -1,3 +1,3 @@
 # rfq-contracts
 
-Smart contracts for RFQ settlement process
+Smart contracts for RFQ settlement process. 
