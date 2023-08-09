@@ -1,4 +1,4 @@
-# rfq-contracts
+# RFQ Contracts
 
 Smart contracts for RFQ settlement process. 
 
